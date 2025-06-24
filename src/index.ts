@@ -21,16 +21,19 @@ const app = new Elysia()
   )
   .use(
     cors({
-      origin: [
-        "http://localhost:3000", // dev
-        "https://my-frontend.vercel.app", // prod
-      ],
+      /* ★ ดึง Origin ที่ลูกค้าส่งมาแล้วสะท้อนกลับเลย */
+      origin: ({ request }: any) => request.headers.get("origin") ?? "",
+
+      /* ★ เปิด cookie / auth header ได้ */
       credentials: true,
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization", "X-XSRF-TOKEN"],
+
+      /* ★ ไม่ต้องเดา header / method ให้มันได้หมด */
+      methods: ["*"],
+      allowedHeaders: ["*"],
     })
   )
-  .options("*", cors())
+
+  .options("/*", () => new Response(null, { status: 204 }))
   .use(profilerouter)
   .use(middlewareadmin)
   .use(Tablerouter)
