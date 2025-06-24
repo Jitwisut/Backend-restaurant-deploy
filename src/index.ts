@@ -19,7 +19,17 @@ const app = new Elysia()
       secret: "kormadi",
     })
   )
-  .use(cors())
+  .use(
+    cors({
+      origin: [
+        "http://localhost:3000", // dev
+        "https://my-frontend.vercel.app", // prod
+      ],
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization", "X-XSRF-TOKEN"],
+    })
+  )
   .use(profilerouter)
   .use(middlewareadmin)
   .use(Tablerouter)
