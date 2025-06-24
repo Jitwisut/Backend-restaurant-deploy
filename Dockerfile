@@ -1,17 +1,17 @@
-# --- Dockerfile ---
-FROM oven/bun:1                        
+# ---- Dockerfile ----
+FROM oven/bun:1
 WORKDIR /app
 
-# คัดลอกไฟล์ทั้งหมด
+# คัดลอกโปรเจ็กต์ทั้งหมด
 COPY . .
 
-# ติดตั้ง dependency (production)
+# ติดตั้ง dependency แบบ production
 RUN bun install --production
 
-# รับพอร์ตจากตัวแปร PORT (Koyeb ตั้งให้) หรือใช้ 4000
+# รับพอร์ตจากตัวแปร PORT (Koyeb เซ็ตให้อัตโนมัติ) ถ้าไม่มีใช้ 8000
 ARG PORT
 ENV PORT=${PORT:-4000}
 EXPOSE ${PORT}
 
-# รันแอป (ปรับ path ให้ตรงกับโปรเจกต์)
-CMD ["bun", "run", "start"]
+# คำสั่งรันแอป (ปรับ path ให้ตรงโปรเจ็กต์)
+CMD ["bun", "run", "src/index.ts"]

@@ -18,7 +18,8 @@
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
-    "bun-types": "latest"
+    "bun-types": "latest",
+    "@types/qrcode": "^1.5.5"
   },
   "module": "src/index.js"
 }
