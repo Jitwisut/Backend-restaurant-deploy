@@ -19,7 +19,7 @@ const app = new Elysia()
   /* ① CORS ต้องมาก่อนทุกอย่าง  */
   .use(
     cors({
-      origin: ({ request }: any) => request.headers.get("origin") ?? "",
+      origin: "http://localhost:3000",
       credentials: true,
       methods: ["*"],
       allowedHeaders: ["*"],
