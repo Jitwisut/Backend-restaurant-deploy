@@ -30,6 +30,7 @@ const app = new Elysia()
       allowedHeaders: ["Content-Type", "Authorization", "X-XSRF-TOKEN"],
     })
   )
+  .options("*", cors())
   .use(profilerouter)
   .use(middlewareadmin)
   .use(Tablerouter)
