@@ -9,6 +9,7 @@ import { menurouter } from "./router/menurouter";
 import { web } from "./router/websocket";
 import { profilerouter } from "./router/Profilerouter";
 import { elysiaHelmet } from "elysiajs-helmet";
+const port = Number(process.env.PORT) || 8000;
 const app = new Elysia()
   .get("/", () => "Hello Elysia")
   .use(elysiaHelmet({}))
@@ -27,7 +28,7 @@ const app = new Elysia()
   .use(menurouter)
   .use(web)
   .listen({
-    port: 4000,
+    port: port,
     //    hostname: "0.0.0.0"
   });
 
