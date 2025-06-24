@@ -64,6 +64,7 @@ export const Authcontroller = {
 
       cookie.auth.set({
         value: token,
+        sameSite: "None",
         httpOnly: true,
         path: "/",
         maxAge: 60 * 30,
