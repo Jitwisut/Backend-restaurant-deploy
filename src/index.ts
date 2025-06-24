@@ -26,9 +26,6 @@ const app = new Elysia()
     })
   )
 
-  /* ② รับ pre-flight ทุก path ก่อนปลั๊กอิน Auth */
-  .options("/*", () => new Response(null, { status: 204 }))
-
   /* ③ ปลั๊กอินอื่น ๆ ต่อจากนี้ */
   .use(elysiaHelmet({}))
   .use(
