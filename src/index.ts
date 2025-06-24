@@ -14,9 +14,10 @@ import { profilerouter } from "./router/Profilerouter";
 
 const port = Number(process.env.PORT) || 8000;
 
-const app = new Elysia()
+const app = new Elysia();
 
-  /* ① CORS ต้องมาก่อนทุกอย่าง  */
+/* ① CORS ต้องมาก่อนทุกอย่าง  */
+app
   .use(
     cors({
       origin: "http://localhost:3000",
