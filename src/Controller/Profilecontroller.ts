@@ -16,7 +16,7 @@ interface MyStore {
 export const Profilecontroller = {
   getprofile: async (context: Context) => {
     const { jwt, cookie, set } = context as AppContext;
-    const token = cookie.auth.value;
+    const token = cookie.kitchen_auth?.value || cookie.auth?.value;
     if (!token) {
       set.status = 401;
       return { message: "Please login" };
