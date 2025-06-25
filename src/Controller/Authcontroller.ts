@@ -66,7 +66,7 @@ export const Authcontroller = {
           value: token,
           sameSite: "None",
           httpOnly: true,
-          path: "/kitchen",
+          path: "/",
           maxAge: 60 * 30,
           secure: true,
         });
