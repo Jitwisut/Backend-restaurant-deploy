@@ -14,16 +14,18 @@ interface MyStore {
 }
 
 export const Profilecontroller = {
-  getprofile: ({ set, store }: Context) => {
-    store as AppContext;
-    if (!(store as MyStore).decode) {
-      set.status = 400;
-      return { message: "Error: Please login" };
+  getprofile: async (context: Context) => {
+    const { jwt, cookie, set } = context as AppContext;
+    const token = cookie.auth.value;
+    if (!token) {
+      set.status = 401;
+      return { message: "Please login" };
     }
-
-    const user = (store as MyStore).decode?.decode.username;
-
-    const role = (store as MyStore).decode?.decode.role;
+    const decode = await jwt.verify(token);
+    console.log(decode);
+    const user = decode.username;
+    const role = decode.role;
+    set.status = 200;
     return { message: "Success", user: user, role: role };
   },
 };
