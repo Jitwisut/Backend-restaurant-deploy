@@ -68,7 +68,7 @@ export const Authcontroller = {
         httpOnly: true,
         path: "/",
         maxAge: 60 * 30,
-        secure: process.env.NODE_ENV === "production",
+        secure: true,
       });
       let redirectpath;
       if (user.role === "admin") {
