@@ -115,7 +115,7 @@ export const Authcontroller = {
     set: any;
   }) => {
     const { username, email, password, role } = body;
-    console.log("username", username);
+    //("username", username);
     if (!username || !email || !password || !role) {
       set.status = 400;
       return { message: "Error: Please complete all fields" };

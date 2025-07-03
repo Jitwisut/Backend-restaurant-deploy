@@ -12,15 +12,16 @@ import { menurouter } from "./router/menurouter";
 import { web } from "./router/websocket";
 import { profilerouter } from "./router/Profilerouter";
 
-const port = Number(process.env.PORT) || 8000;
-
+const port = Number(Bun.env.PORT);
+const jwtsecret = Bun.env.JWT_SECRET as string;
+const url = Bun.env.ORIGIN_URL;
 const app = new Elysia();
 
 /* ① CORS ต้องมาก่อนทุกอย่าง  */
 app
   .use(
     cors({
-      origin: "http://localhost:3000",
+      origin: url,
       credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization", "X-XSRF-TOKEN"],
@@ -38,7 +39,7 @@ app
   .use(
     jwt({
       name: "jwt",
-      secret: "kormadi",
+      secret: "Bun.env.JWT_SECRET as string",
     })
   )
 
