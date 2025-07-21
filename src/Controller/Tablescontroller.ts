@@ -16,6 +16,7 @@ export const Tablecontroller = {
   opentable: async ({ set, body }: any) => {
     const rawNumber = body.number?.trim();
     const tableNumber = parseInt(rawNumber ?? "", 10);
+    const paddedNumber = tableNumber.toString().padStart(2, "0"); // 2 → "02"
 
     if (isNaN(tableNumber) || tableNumber < 1 || tableNumber > 99) {
       set.status = 400;
@@ -39,7 +40,7 @@ export const Tablecontroller = {
          AND status           = 'available'
     `);
 
-      stmt.run(hash, qrBase64, tableNumber); // ❌ ห้าม await, เป็น sync
+      stmt.run(hash, qrBase64, paddedNumber); // ❌ ห้าม await, เป็น sync
       const changes = db.changes;
 
       if (changes === 0) {
@@ -69,7 +70,7 @@ export const Tablecontroller = {
   }) => {
     const rawNumber = body.number?.trim();
     const tableNumber = parseInt(rawNumber ?? "", 10);
-
+    const paddedNumber = tableNumber.toString().padStart(2, "0"); // 2 → "02"
     if (isNaN(tableNumber) || tableNumber < 1 || tableNumber > 99) {
       set.status = 400;
       return { message: "หมายเลขโต๊ะไม่ถูกต้อง" };
@@ -86,7 +87,7 @@ export const Tablecontroller = {
          AND status <> 'available'
     `);
 
-      stmt.run(tableNumber); // ✅ ใช้แบบ sync เท่านั้น
+      stmt.run(paddedNumber); // ✅ ใช้แบบ sync เท่านั้น
       const changes = db.changes; // ✅ fallback ปลอดภัย
       console.log(changes);
       if (changes === 0) {
