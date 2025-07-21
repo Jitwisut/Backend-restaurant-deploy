@@ -118,11 +118,13 @@ export const Tablecontroller = {
       set.status = 400;
       return { message: "ไม่พบ hashcode" };
     }
-
+    const re = db.prepare("SELECT * FROM tables");
+    const reu = re.get();
+    console.log("db:", reu);
     const query = "SELECT * FROM tables WHERE customer_session = ?";
     const stmt = db.prepare(query);
     const result = stmt.get(hashcode); // ✅ sync: ไม่มี await
-
+    console.log("result", result);
     if (!result) {
       set.status = 404;
       return { message: "ไม่พบโต๊ะ" };
