@@ -88,7 +88,7 @@ export const Tablecontroller = {
 
       stmt.run(tableNumber); // ✅ ใช้แบบ sync เท่านั้น
       const changes = db.changes; // ✅ fallback ปลอดภัย
-
+      console.log(changes);
       if (changes === 0) {
         set.status = 404;
         return { message: "โต๊ะนี้ไม่มีข้อมูลหรือว่างอยู่แล้ว" };
