@@ -119,7 +119,7 @@ export const Tablecontroller = {
       return { message: "ไม่พบ hashcode" };
     }
     const re = db.prepare("SELECT * FROM tables");
-    const reu = re.get();
+    const reu = re.all();
     console.log("db:", reu);
     const query = "SELECT * FROM tables WHERE customer_session = ?";
     const stmt = db.prepare(query);
