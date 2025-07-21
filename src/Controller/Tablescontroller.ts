@@ -4,7 +4,7 @@ import { Context } from "elysia";
 import QRCode from "qrcode";
 import crypto from "crypto";
 const baseurl = Bun.env.ORIGIN_URL;
-const db = new Database("restaurant.sqlite");
+const db = new Database("restaurant.sqlite") as any;
 const nanoid = customAlphabet("1234567890abcdef", 8);
 export const Tablecontroller = {
   gettable: async ({ set }: Context) => {
@@ -14,36 +14,39 @@ export const Tablecontroller = {
     return { tables: result };
   },
   opentable: async ({ set, body }: any) => {
-    const tableNumber = body.number?.trim();
-    if (!/^\d{1,2}$/.test(tableNumber ?? "")) {
+    const rawNumber = body.number?.trim();
+    const tableNumber = parseInt(rawNumber ?? "", 10);
+
+    if (isNaN(tableNumber) || tableNumber < 1 || tableNumber > 99) {
       set.status = 400;
       return { message: "หมายเลขโต๊ะไม่ถูกต้อง" };
     }
-    const hash = nanoid(10); // hash สำหรับ session
+
+    const hash = nanoid(10); // session hash
     const qrPath = `/order/${hash}`;
     const fullURL = `${baseurl}${qrPath}`;
 
     try {
-      const qrBase64 = await QRCode.toDataURL(fullURL);
+      const qrBase64 = await QRCode.toDataURL(fullURL); // ✅ async (คงไว้)
 
-      const stmt = await db.prepare(
-        `
-        UPDATE tables
-        SET status          = 'open',
-            opened_at       = CURRENT_TIMESTAMP,
-            customer_session= ?,        -- เก็บ hash ตรงนี้
-            qr_code_url     = ?
-        WHERE table_number  = ?
-          AND status        = 'available'
-      `
-      );
-      console.log("📌 Prepare statement:", stmt); // <<--- สำคัญ
-      const result = await stmt.run(hash, qrBase64, tableNumber);
+      const stmt = db.prepare(`
+      UPDATE tables
+         SET status           = 'open',
+             opened_at        = CURRENT_TIMESTAMP,
+             customer_session = ?,
+             qr_code_url      = ?
+       WHERE table_number     = ?
+         AND status           = 'available'
+    `);
 
-      if (result.changes === 0) {
-        set.status = 409; // Conflict
+      stmt.run(hash, qrBase64, tableNumber); // ❌ ห้าม await, เป็น sync
+      const changes = db.changes;
+
+      if (changes === 0) {
+        set.status = 409;
         return { message: "โต๊ะนี้ถูกเปิดแล้วหรือไม่พบ" };
       }
+
       return {
         message: "เปิดโต๊ะสำเร็จ",
         table_number: tableNumber,
@@ -52,7 +55,7 @@ export const Tablecontroller = {
         fullurl: fullURL,
       };
     } catch (err) {
-      console.error(err);
+      console.error("❌ opentable error:", err);
       set.status = 500;
       return { message: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" };
     }
