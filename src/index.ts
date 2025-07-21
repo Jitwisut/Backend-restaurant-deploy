@@ -39,7 +39,7 @@ app
   .use(
     jwt({
       name: "jwt",
-      secret: "Bun.env.JWT_SECRET as string",
+      secret: jwtsecret,
     })
   )
 

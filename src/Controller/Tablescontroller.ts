@@ -3,6 +3,7 @@ import { customAlphabet } from "nanoid";
 import { Context } from "elysia";
 import QRCode from "qrcode";
 import crypto from "crypto";
+const baseurl = Bun.env.ORIGIN_URL;
 const db = new Database("restaurant.sqlite");
 const nanoid = customAlphabet("1234567890abcdef", 8);
 export const Tablecontroller = {
@@ -20,15 +21,13 @@ export const Tablecontroller = {
     }
     const hash = nanoid(10); // hash สำหรับ session
     const qrPath = `/order/${hash}`;
-    const bashurl = "http://localhost:3000";
-    const fullURL = `${bashurl}${qrPath}`;
+    const fullURL = `${baseurl}${qrPath}`;
 
     try {
       const qrBase64 = await QRCode.toDataURL(fullURL);
 
-      const result = await db
-        .prepare(
-          `
+      const stmt = await db.prepare(
+        `
         UPDATE tables
         SET status          = 'open',
             opened_at       = CURRENT_TIMESTAMP,
@@ -37,8 +36,8 @@ export const Tablecontroller = {
         WHERE table_number  = ?
           AND status        = 'available'
       `
-        )
-        .run(hash, qrBase64, tableNumber);
+      );
+      const result = stmt.run(hash, qrBase64, tableNumber);
 
       if (result.changes === 0) {
         set.status = 409; // Conflict
