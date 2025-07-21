@@ -38,7 +38,7 @@ export const Tablecontroller = {
       `
       );
       console.log("📌 Prepare statement:", stmt); // <<--- สำคัญ
-      const result = stmt.run(hash, qrBase64, tableNumber);
+      const result = await stmt.run(hash, qrBase64, tableNumber);
 
       if (result.changes === 0) {
         set.status = 409; // Conflict
