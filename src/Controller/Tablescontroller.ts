@@ -87,7 +87,7 @@ export const Tablecontroller = {
     `);
 
       stmt.run(tableNumber); // ✅ ใช้แบบ sync เท่านั้น
-      const changes = (db as any).changes ?? 0; // ✅ fallback ปลอดภัย
+      const changes = db.changes; // ✅ fallback ปลอดภัย
 
       if (changes === 0) {
         set.status = 404;
