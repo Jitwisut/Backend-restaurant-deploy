@@ -113,7 +113,7 @@ export const Tablecontroller = {
     params: Context["params"];
   }) => {
     const hashcode = params.session;
-
+    console.log(hashcode);
     if (!hashcode) {
       set.status = 400;
       return { message: "ไม่พบ hashcode" };
