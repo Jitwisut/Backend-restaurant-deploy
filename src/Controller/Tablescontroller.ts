@@ -96,9 +96,12 @@ export const Tablecontroller = {
 
       return { message: "ปิดโต๊ะเรียบร้อย", table_number: tableNumber };
     } catch (err) {
-      console.error("❌ closetable error:", err);
+      console.error("❌ closetable error:", (err as Error).message);
       set.status = 500;
-      return { message: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" };
+      return {
+        message: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์",
+        Error: (err as Error).message,
+      };
     }
   },
 
