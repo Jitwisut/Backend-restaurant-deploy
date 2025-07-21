@@ -67,41 +67,42 @@ export const Tablecontroller = {
     set: Context["set"];
     body: { number: string };
   }) => {
-    const number = body.number?.trim();
+    const rawNumber = body.number?.trim();
+    const tableNumber = parseInt(rawNumber ?? "", 10);
 
-    if (!/^\d{1,2}$/.test(number ?? "")) {
+    if (isNaN(tableNumber) || tableNumber < 1 || tableNumber > 99) {
       set.status = 400;
       return { message: "หมายเลขโต๊ะไม่ถูกต้อง" };
     }
-    //(number);
-    try {
-      const result = await db
-        .prepare(
-          `
-        UPDATE tables
-        SET    status           = 'available',
-               opened_at        = NULL,
-               qr_code_url      = NULL,
-               customer_session = NULL
-        WHERE  table_number     = ?
-          AND  status <> 'available'
-      `
-        )
-        .run(number);
 
-      if (result.changes === 0) {
+    try {
+      const stmt = db.prepare(`
+      UPDATE tables
+         SET status           = 'available',
+             opened_at        = NULL,
+             qr_code_url      = NULL,
+             customer_session = NULL
+       WHERE table_number     = ?
+         AND status <> 'available'
+    `);
+
+      stmt.run(tableNumber); // ✅ ใช้แบบ sync เท่านั้น
+      const changes = (db as any).changes ?? 0; // ✅ fallback ปลอดภัย
+
+      if (changes === 0) {
         set.status = 404;
         return { message: "โต๊ะนี้ไม่มีข้อมูลหรือว่างอยู่แล้ว" };
       }
 
-      return { message: "ปิดโต๊ะเรียบร้อย", table_number: number };
+      return { message: "ปิดโต๊ะเรียบร้อย", table_number: tableNumber };
     } catch (err) {
-      console.error(err);
+      console.error("❌ closetable error:", err);
       set.status = 500;
       return { message: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" };
     }
   },
-  checktabel: async ({
+
+  checktabel: ({
     set,
     params,
   }: {
@@ -114,12 +115,16 @@ export const Tablecontroller = {
       set.status = 400;
       return { message: "ไม่พบ hashcode" };
     }
-    const query = "SELECT * FROM tables WHERE customer_session=?";
-    const result = await db.prepare(query).get(hashcode);
+
+    const query = "SELECT * FROM tables WHERE customer_session = ?";
+    const stmt = db.prepare(query);
+    const result = stmt.get(hashcode); // ✅ sync: ไม่มี await
+
     if (!result) {
       set.status = 404;
       return { message: "ไม่พบโต๊ะ" };
     }
+
     set.status = 200;
     return { message: "พบโต๊ะ", table: result };
   },
