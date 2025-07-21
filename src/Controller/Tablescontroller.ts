@@ -32,11 +32,12 @@ export const Tablecontroller = {
         SET status          = 'open',
             opened_at       = CURRENT_TIMESTAMP,
             customer_session= ?,        -- เก็บ hash ตรงนี้
-            qr_code_url     = ?
-        WHERE table_number  = ?
+            qr_code_url     = ?,
+        WHERE table_number  = ?,
           AND status        = 'available'
       `
       );
+      console.log("📌 Prepare statement:", stmt); // <<--- สำคัญ
       const result = stmt.run(hash, qrBase64, tableNumber);
 
       if (result.changes === 0) {
