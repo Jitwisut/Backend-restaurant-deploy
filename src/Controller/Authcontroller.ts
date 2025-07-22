@@ -64,7 +64,7 @@ export const Authcontroller = {
       if (user.role === "kitchen") {
         cookie.kitchen_auth.set({
           value: token,
-          sameSite: "strict",
+          sameSite: "none",
           httpOnly: true,
           path: "/",
           maxAge: 60 * 30,
@@ -73,7 +73,7 @@ export const Authcontroller = {
       } else {
         cookie.auth.set({
           value: token,
-          sameSite: "strict",
+          sameSite: "none",
           httpOnly: true,
           path: "/",
           maxAge: 60 * 30,
