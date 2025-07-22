@@ -31,7 +31,7 @@ app
   .onAfterHandle(({ request, set }) => {
     const o = request.headers.get("origin");
     if (o) {
-      set.headers["Access-Control-Allow-Origin"] = origin; // สะท้อน origin
+      set.headers["Access-Control-Allow-Origin"] = o; // สะท้อน origin
       set.headers["Access-Control-Allow-Credentials"] = "true";
     }
   })
