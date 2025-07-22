@@ -11,7 +11,6 @@ import { middlewareadmin } from "./router/middlewarerouter";
 import { menurouter } from "./router/menurouter";
 import { web } from "./router/websocket";
 import { profilerouter } from "./router/Profilerouter";
-
 const port = Number(Bun.env.PORT);
 const jwtsecret = Bun.env.JWT_SECRET as string;
 const url = Bun.env.ORIGIN_URL;
@@ -34,6 +33,10 @@ app
       set.headers["Access-Control-Allow-Origin"] = o; // สะท้อน origin
       set.headers["Access-Control-Allow-Credentials"] = "true";
     }
+    set.headers["Content-Security-Policy"] = [
+      "default-src 'self'",
+      "connect-src 'self' https://backend-restaurant-deploy.onrender.com",
+    ].join("; ");
   })
   /* ③ ปลั๊กอินอื่น ๆ ต่อจากนี้ */
   .use(elysiaHelmet({}))
