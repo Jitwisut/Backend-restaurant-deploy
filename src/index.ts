@@ -33,10 +33,8 @@ app
       set.headers["Access-Control-Allow-Origin"] = o; // สะท้อน origin
       set.headers["Access-Control-Allow-Credentials"] = "true";
     }
-    set.headers["Content-Security-Policy"] = [
-      "default-src 'self'",
-      "connect-src 'self' https://backend-restaurant-deploy.onrender.com",
-    ].join("; ");
+    set.headers["Content-Security-Policy"] =
+      "default-src 'self'; connect-src 'self' https://backend-restaurant-deploy.onrender.com https://frontend-restaurant-97nb.vercel.app";
   })
   /* ③ ปลั๊กอินอื่น ๆ ต่อจากนี้ */
   .use(elysiaHelmet({}))
