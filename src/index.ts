@@ -15,13 +15,14 @@ import { profilerouter } from "./router/Profilerouter";
 const port = Number(Bun.env.PORT);
 const jwtsecret = Bun.env.JWT_SECRET as string;
 const url = Bun.env.ORIGIN_URL;
+const url2 = Bun.env.ORIGIN_URL2;
 const app = new Elysia();
 
 /* ① CORS ต้องมาก่อนทุกอย่าง  */
 app
   .use(
     cors({
-      origin: url,
+      origin: url2,
       credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization", "X-XSRF-TOKEN"],
