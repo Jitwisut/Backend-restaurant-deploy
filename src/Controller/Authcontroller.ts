@@ -92,6 +92,7 @@ export const Authcontroller = {
 
       return {
         message: "Success: You have logged in",
+        token,
         refreshToken,
         redirectpath,
       };
