@@ -61,25 +61,6 @@ export const Authcontroller = {
 
       const token = await jwt.sign(payload);
       const refreshToken = await jwt.sign(payloadRefresh);
-      if (user.role === "kitchen") {
-        cookie.kitchen_auth.set({
-          value: token,
-          sameSite: "none",
-          httpOnly: true,
-          path: "/",
-          maxAge: 60 * 30,
-          secure: true,
-        });
-      } else {
-        cookie.auth.set({
-          value: token,
-          sameSite: "none",
-          httpOnly: true,
-          path: "/",
-          maxAge: 60 * 30,
-          secure: true,
-        });
-      }
 
       let redirectpath;
       if (user.role === "admin") {
