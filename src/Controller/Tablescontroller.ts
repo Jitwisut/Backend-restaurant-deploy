@@ -11,6 +11,7 @@ export const Tablecontroller = {
     const query = "SELECT * FROM tables";
     const result = await db.query(query).all();
     set.status = 200;
+
     return { tables: result };
   },
   opentable: async ({ set, body }: any) => {
@@ -89,7 +90,7 @@ export const Tablecontroller = {
 
       stmt.run(paddedNumber); // ✅ ใช้แบบ sync เท่านั้น
       const changes = db.changes; // ✅ fallback ปลอดภัย
-      console.log(changes);
+
       if (changes === 0) {
         set.status = 404;
         return { message: "โต๊ะนี้ไม่มีข้อมูลหรือว่างอยู่แล้ว" };
