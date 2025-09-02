@@ -68,12 +68,19 @@ export const Admincontroller = {
       set.status = 400;
       return { message: "Please fill all field" };
     }
+
     try {
       let query = "SELECT * FROM user WHERE username=?";
+      let checkemail = "SELECT email from user WHERE email=?";
+      const email = db.prepare(checkemail).get(body.email);
       const user = db.prepare(query).get(body.username);
       if (user) {
         set.status = 400;
         return { message: "Username already exist" };
+      }
+      if (email) {
+        set.status = 400;
+        return { message: "email already exist" };
       }
       const hashpass = await bcryptjs.hash(body.password, 10);
       query =
