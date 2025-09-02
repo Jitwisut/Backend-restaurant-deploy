@@ -1,5 +1,5 @@
 import { Context } from "elysia";
-import { getDB } from "../test/connect";
+import { getDB } from "../lib/connect";
 const db = getDB();
 export const menucontroller = {
   getmenu: async ({ set }: { set: Context["set"] }) => {

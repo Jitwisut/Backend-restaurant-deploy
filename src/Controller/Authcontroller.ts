@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import bcryptjs from "bcryptjs";
-import { getDB } from "../test/connect";
+import { getDB } from "../lib/connect";
 const db = getDB();
 
 export const Authcontroller = {
