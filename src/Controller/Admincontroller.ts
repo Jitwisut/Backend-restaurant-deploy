@@ -55,7 +55,7 @@ export const Admincontroller = {
       const { originuser, username, email, role } = body;
 
       const query =
-        "UPDATE user SET username=$1, email=$2, role=$3 WHERE username=$4";
+        "UPDATE users SET username=$1, email=$2, role=$3 WHERE username=$4";
       const result = await db.query(query, [username, email, role, originuser]);
 
       set.status = 200;
@@ -79,8 +79,8 @@ export const Admincontroller = {
     }
 
     try {
-      let query = "SELECT * FROM user WHERE username=$1";
-      let checkemail = "SELECT email from user WHERE email=$1";
+      let query = "SELECT * FROM users WHERE username=$1";
+      let checkemail = "SELECT email from users WHERE email=$1";
       const email = db.query(checkemail, [body.email]);
       const user = db.query(query, [body.username]);
       if (user.rowCount > 0) {
@@ -93,10 +93,17 @@ export const Admincontroller = {
       }
       const hashpass = await bcryptjs.hash(body.password, 10);
       query =
-        "INSERT INTO user (username,email,password,role) VALUES ($1,$2,$3,$4)";
-      db.query(query, [body.username, body.email, hashpass, body.role]);
-      set.status = 201;
-      return { message: "Success create user" };
+        "INSERT INTO users (username,email,password,role) VALUES ($1,$2,$3,$4)";
+      const result = await db.query(query, [
+        body.username,
+        body.email,
+        hashpass,
+        body.role,
+      ]);
+      if (result.rowCount > 0) {
+        set.status = 201;
+        return { message: "Success create user" };
+      }
     } catch (error) {
       set.status = 500;
       return { message: (error as Error).message };
@@ -148,7 +155,7 @@ export const Admincontroller = {
       set.status = 400;
       return { message: "Please Enter username" };
     }
-    const query = "DELETE FROM user WHERE username=$1";
+    const query = "DELETE FROM users WHERE username=$1";
     const result = db.query(query, [username]);
     if (result.rowCount === 0) {
       console.warn("ไม่พบผู้ใช้ที่จะลบ");
