@@ -81,8 +81,8 @@ export const Admincontroller = {
     try {
       let query = "SELECT * FROM users WHERE username=$1";
       let checkemail = "SELECT email from users WHERE email=$1";
-      const email = db.query(checkemail, [body.email]);
-      const user = db.query(query, [body.username]);
+      const email = await db.query(checkemail, [body.email]);
+      const user = await db.query(query, [body.username]);
       if (user.rowCount > 0) {
         set.status = 400;
         return { message: "Username already exist" };
