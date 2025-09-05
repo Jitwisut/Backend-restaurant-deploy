@@ -81,22 +81,23 @@ export const Admincontroller = {
     try {
       let query = "SELECT * FROM users WHERE username=$1";
       let checkemail = "SELECT email from users WHERE email=$1";
-      const email = await db.query(checkemail, [body.email]);
+      const resultemail = await db.query(checkemail, [body.email]);
       const user = await db.query(query, [body.username]);
       if (user.rowCount > 0) {
         set.status = 400;
         return { message: "Username already exist" };
       }
-      if (email.rowCount > 0) {
+      if (resultemail.rowCount > 0) {
         set.status = 400;
         return { message: "Email already exist" };
       }
       const hashpass = await bcryptjs.hash(body.password, 10);
+      const email = body.email.trim().toLowerCase();
       query =
         "INSERT INTO users (username,email,password,role) VALUES ($1,$2,$3,$4)";
       const result = await db.query(query, [
         body.username,
-        body.email,
+        email,
         hashpass,
         body.role,
       ]);
