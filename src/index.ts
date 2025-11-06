@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import cors from "@elysiajs/cors";
 import jwt from "@elysiajs/jwt";
 import { elysiaHelmet } from "elysiajs-helmet";
+import { rateLimit } from "elysia-rate-limit";
 /* routers ของคุณ */
 import { Auths } from "./router/Auth";
 import { Adminrouter } from "./router/Adminrouter";
@@ -18,6 +19,7 @@ const app = new Elysia();
 
 /* ① CORS ต้องมาก่อนทุกอย่าง  */
 app
+  
   .use(
     cors({
       origin: url2,
@@ -35,7 +37,7 @@ app
     set.headers["Content-Security-Policy"] =
       "default-src 'self'; connect-src 'self' https://backend-restaurant-deploy.onrender.com https://frontend-restaurant-97nb.vercel.app";
   })
-  /* ③ ปลั๊กอินอื่น ๆ ต่อจากนี้ */
+
   .use(elysiaHelmet({}))
 
   .use(

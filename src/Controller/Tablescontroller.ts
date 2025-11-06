@@ -1,11 +1,11 @@
-import { Database } from "bun:sqlite";
+
 import { customAlphabet } from "nanoid";
 import { Context } from "elysia";
 import QRCode from "qrcode";
-import crypto from "crypto";
 import { getDB } from "../lib/connect";
 const baseurl = Bun.env.ORIGIN_URL;
 const db = getDB();
+
 const nanoid = customAlphabet("1234567890abcdef", 8);
 export const Tablecontroller = {
   gettable: async ({ set }: Context) => {
@@ -16,7 +16,7 @@ export const Tablecontroller = {
     return { tables: result.rows };
   },
   opentable: async ({ set, body }: any) => {
-    const rawNumber = body.number?.trim();
+    const rawNumber = body.number;
     const tableNumber = parseInt(rawNumber ?? "", 10);
     const paddedNumber = tableNumber.toString().padStart(2, "0"); // 2 → "02"
 
@@ -71,7 +71,7 @@ export const Tablecontroller = {
     set: Context["set"];
     body: { number: string };
   }) => {
-    const rawNumber = body.number?.trim();
+    const rawNumber = body.number;
     const tableNumber = parseInt(rawNumber ?? "", 10);
     const paddedNumber = tableNumber.toString().padStart(2, "0"); // 2 → "02"
     if (isNaN(tableNumber) || tableNumber < 1 || tableNumber > 99) {
