@@ -1,4 +1,3 @@
-
 import { customAlphabet } from "nanoid";
 import { Context } from "elysia";
 import QRCode from "qrcode";
@@ -6,7 +5,10 @@ import { getDB } from "../lib/connect";
 const baseurl = Bun.env.ORIGIN_URL;
 const db = getDB();
 
-const nanoid = customAlphabet("1234567890abcdef", 8);
+const nanoid = customAlphabet(
+  "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+  21
+);
 export const Tablecontroller = {
   gettable: async ({ set }: Context) => {
     const query = "SELECT * FROM tables";
@@ -16,6 +18,7 @@ export const Tablecontroller = {
     return { tables: result.rows };
   },
   opentable: async ({ set, body }: any) => {
+    await db.query("BEGIN");
     const rawNumber = body.number;
     const tableNumber = parseInt(rawNumber ?? "", 10);
     const paddedNumber = tableNumber.toString().padStart(2, "0"); // 2 → "02"
@@ -25,7 +28,7 @@ export const Tablecontroller = {
       return { message: "หมายเลขโต๊ะไม่ถูกต้อง" };
     }
 
-    const hash = nanoid(10); // session hash
+    const hash = nanoid(30); // session hash
     const qrPath = `/order/${hash}`;
     const fullURL = `${baseurl}${qrPath}`;
 
@@ -50,7 +53,7 @@ export const Tablecontroller = {
         set.status = 409; // Conflict
         return { message: "โต๊ะนี้ถูกเปิดแล้วหรือไม่พบ" };
       }
-
+      await db.query("COMMIT");
       return {
         message: "เปิดโต๊ะสำเร็จ",
         table_number: tableNumber,
@@ -59,6 +62,7 @@ export const Tablecontroller = {
         fullurl: fullURL,
       };
     } catch (err) {
+      await db.query("ROLLBACK");
       console.error("❌ opentable error:", err);
       set.status = 500;
       return { message: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" };
@@ -80,7 +84,7 @@ export const Tablecontroller = {
     }
 
     try {
-      const stmt = db.query(
+      const stmt = await db.query(
         `
       UPDATE tables
          SET status           = 'available',
@@ -104,7 +108,6 @@ export const Tablecontroller = {
       set.status = 500;
       return {
         message: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์",
-        Error: (err as Error).message,
       };
     }
   },
