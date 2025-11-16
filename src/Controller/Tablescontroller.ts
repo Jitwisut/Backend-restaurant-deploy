@@ -120,7 +120,6 @@ export const Tablecontroller = {
     params: Context["params"];
   }) => {
     const hashcode = params.session;
-    console.log(hashcode);
     if (!hashcode) {
       set.status = 400;
       return { message: "ไม่พบ hashcode" };
@@ -130,7 +129,6 @@ export const Tablecontroller = {
     const query = "SELECT * FROM tables WHERE customer_session = $1";
     const result = await db.query(query, [hashcode]);
 
-    console.log("result", result);
     if (result.rowCount === 0) {
       set.status = 404;
       return { message: "ไม่พบโต๊ะ" };
@@ -139,5 +137,26 @@ export const Tablecontroller = {
     const table = result.rows[0];
     set.status = 200;
     return { message: "พบโต๊ะ", table: table };
+  },
+  orderhistory: async ({
+    set,
+
+    body,
+  }: {
+    set: Context["set"];
+    params: Context["params"];
+    body: { table_number: Number };
+  }) => {
+    const tablenumber = body.table_number;
+    if (!tablenumber) {
+      set.status = 404;
+      return { message: "No table number" };
+    }
+    const result = await db.query(
+      "SELECT * FROM orders JOIN order_items ON orders.id=order_items.order_id WHERE table_number=$1",
+      [tablenumber]
+    );
+    console.log("order", result.rows);
+    return { order: result.rows };
   },
 };

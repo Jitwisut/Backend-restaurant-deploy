@@ -1,6 +1,7 @@
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { Tablecontroller } from "../Controller/Tablescontroller";
 import { rateLimit } from "elysia-rate-limit";
+
 export const Tablerouter = (app: Elysia) => {
   return app.group("/tables", (app) => {
     const gettableLimit = new Elysia()
@@ -27,7 +28,16 @@ export const Tablerouter = (app: Elysia) => {
       .use(gettableLimit)
       .post("/opentable", Tablecontroller.opentable)
       .post("/closetable", Tablecontroller.closetable)
-      .get("/checktable/:session", Tablecontroller.checktabel);
+      .get("/checktable/:session", Tablecontroller.checktabel)
+      .post("/orderhistory", Tablecontroller.orderhistory, {
+        body: t.Object({
+          table_number: t.Number({
+            minimum: 1,
+            maximum: 11,
+            error: "Quantity must be between 1-11",
+          }),
+        }),
+      });
     return app;
   });
 };
