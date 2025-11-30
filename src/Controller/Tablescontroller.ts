@@ -2,6 +2,7 @@ import { customAlphabet } from "nanoid";
 import { Context } from "elysia";
 import QRCode from "qrcode";
 import { getDB } from "../lib/connect";
+import { notifyTableClosed } from "../router/websocket";
 const baseurl = Bun.env.ORIGIN_URL;
 const db = getDB();
 
@@ -71,9 +72,11 @@ export const Tablecontroller = {
   closetable: async ({
     set,
     body,
+    server,
   }: {
     set: Context["set"];
     body: { number: string };
+    server: Context["server"];
   }) => {
     const rawNumber = body.number;
     const tableNumber = parseInt(rawNumber ?? "", 10);
@@ -84,6 +87,10 @@ export const Tablecontroller = {
     }
 
     try {
+      const current_table = await db.query(
+        `SELECT customer_session FROM tables WHERE table_number=$1  AND status <> 'available'`,
+        [paddedNumber]
+      );
       const stmt = await db.query(
         `
       UPDATE tables
@@ -93,6 +100,7 @@ export const Tablecontroller = {
              customer_session = NULL
        WHERE table_number     = $1
          AND status <> 'available'
+         
     `,
         [paddedNumber]
       );
@@ -101,6 +109,21 @@ export const Tablecontroller = {
         set.status = 404;
         return { message: "โต๊ะนี้ไม่มีข้อมูลหรือว่างอยู่แล้ว" };
       }
+      const closedSession = current_table.rows[0].customer_session;
+      console.log(closedSession);
+      if (closedSession) {
+        server?.publish(
+          closedSession,
+          JSON.stringify({
+            type: "table_closed",
+            message: "Table has been close",
+          })
+        );
+      }
+      const result = await db.query(
+        "UPDATE orders SET status='completed' WHERE table_number=$1",
+        [tableNumber]
+      );
 
       return { message: "ปิดโต๊ะเรียบร้อย", table_number: tableNumber };
     } catch (err) {

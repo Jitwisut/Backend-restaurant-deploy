@@ -30,9 +30,9 @@ type IncomingMsg =
   | MsgOrderStatus
   | { type: string };
 type Msgcallstaff = {
-  type: "call_staff"
-  table_number: number | string
-}
+  type: "call_staff";
+  table_number: number | string;
+};
 const sockets: Record<Role, Map<string, ServerWebSocket<any>>> = {
   user: new Map(),
   kitchen: new Map(),
@@ -159,8 +159,8 @@ function safeParse(
       typeof msg === "string"
         ? msg
         : msg instanceof Uint8Array
-          ? td.decode(msg)
-          : String(msg);
+        ? td.decode(msg)
+        : String(msg);
     return { ok: true, data: JSON.parse(text) };
   } catch (err: any) {
     return { ok: false, err };
@@ -181,15 +181,18 @@ function preview(val: unknown, max = 300) {
       typeof val === "string"
         ? val
         : val instanceof Uint8Array
-          ? td.decode(val)
-          : JSON.stringify(val);
+        ? td.decode(val)
+        : JSON.stringify(val);
     return s.length > max ? s.slice(0, max) + "…" : s;
   } catch {
     return String(val);
   }
 }
 function ensureCallStaff(x: any): x is Msgcallstaff {
-  return x?.type === "call_staff" && (typeof x?.table_number === "string" || typeof x?.table_number === "number");
+  return (
+    x?.type === "call_staff" &&
+    (typeof x?.table_number === "string" || typeof x?.table_number === "number")
+  );
 }
 
 function ensureMessage(x: any): x is MsgMessage {
@@ -212,9 +215,12 @@ function ensureOrderStatus(x: any): x is MsgOrderStatus {
 export const web = (app: Elysia) => {
   return app.ws("/ws/:user", {
     query: t.Object({
-      role: t.Union([t.Literal("user"), t.Literal("kitchen"), t.Literal("admin")], {
-        default: "user",
-      }),
+      role: t.Union(
+        [t.Literal("user"), t.Literal("kitchen"), t.Literal("admin")],
+        {
+          default: "user",
+        }
+      ),
     }),
 
     open(ws) {
@@ -223,7 +229,7 @@ export const web = (app: Elysia) => {
 
       sockets[role].set(username, (ws as any).raw);
       clients.set(username, { ws: (ws as any).raw, role });
-
+      ws.subscribe(username);
       sendJSON(ws as any, {
         type: "system",
         message: `เชื่อมต่อสำเร็จในชื่อ ${username} (Role: ${role})`,
@@ -246,7 +252,8 @@ export const web = (app: Elysia) => {
 
       // Log raw payload (เห็นชัดว่า client ส่งอะไรจริง)
       console.log(
-        `[WS IN] user=${username} role=${sender.role
+        `[WS IN] user=${username} role=${
+          sender.role
         } typeof=${typeof msg} raw=${preview(msg)}`
       );
 
@@ -421,7 +428,10 @@ async function routeMessage(
       }
       const adminEntries = Array.from(sockets.admin.values());
       if (adminEntries.length === 0) {
-        sendJSON(ws, { type: "error", message: "ไม่พบผู้ใช้หรือไม่ได้เชื่อมต่อ" });
+        sendJSON(ws, {
+          type: "error",
+          message: "ไม่พบผู้ใช้หรือไม่ได้เชื่อมต่อ",
+        });
         return;
       }
       adminEntries.forEach((adminWs) => {
@@ -432,9 +442,13 @@ async function routeMessage(
           timestamp: new Date().toISOString(),
         });
       });
-      sendJSON(ws, { type: "system", message: "เรียกพนักงานแล้ว รอสักครู่..." });
+      sendJSON(ws, {
+        type: "system",
+        message: "เรียกพนักงานแล้ว รอสักครู่...",
+      });
       return;
     }
+
     default: {
       console.warn("[WS INVALID TYPE]", msg);
       sendJSON(ws, {
@@ -446,3 +460,20 @@ async function routeMessage(
     }
   }
 }
+export const notifyTableClosed = (sessionHash: string) => {
+  // 1. หาว่า session นี้เชื่อมต่ออยู่ไหม
+  const client = clients.get(sessionHash);
+
+  if (client && client.ws) {
+    // 2. ส่งข้อความแจ้งเตือนไปหา
+    sendJSON(client.ws, {
+      type: "table_closed",
+      message: "Table has been closed by staff",
+    });
+    console.log(`[WS EXTERNAL] Sent close signal to ${sessionHash}`);
+    return true;
+  }
+
+  console.log(`[WS EXTERNAL] User ${sessionHash} not found or disconnected`);
+  return false;
+};
