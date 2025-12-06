@@ -2,14 +2,12 @@ import { customAlphabet } from "nanoid";
 import { Context } from "elysia";
 import QRCode from "qrcode";
 import { getDB } from "../lib/connect";
+import { randomUUID } from "crypto";
 import { notifyTableClosed } from "../router/websocket";
 const baseurl = Bun.env.ORIGIN_URL;
 const db = getDB();
 
-const nanoid = customAlphabet(
-  "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
-  21
-);
+const nanoid = randomUUID();
 export const Tablecontroller = {
   gettable: async ({ set }: Context) => {
     const query = "SELECT * FROM tables";
@@ -29,13 +27,16 @@ export const Tablecontroller = {
       return { message: "หมายเลขโต๊ะไม่ถูกต้อง" };
     }
 
-    const hash = nanoid(30); // session hash
+    const hash = nanoid; // session hash
     const qrPath = `/order/${hash}`;
     const fullURL = `${baseurl}${qrPath}`;
 
     try {
       const qrBase64 = await QRCode.toDataURL(fullURL); // ✅ async (คงไว้)
-
+      await db.query(
+        "INSERT INTO sessions (session_id,table_number,opened_at) VALUES ($1,$2,NOW())",
+        [hash, paddedNumber]
+      );
       const result = await db.query(
         `
   UPDATE tables
@@ -104,14 +105,18 @@ export const Tablecontroller = {
     `,
         [paddedNumber]
       );
-
+      await db.query(
+        "UPDATE sessions SET closed_at=NOW() WHERE session_id=$1",
+        [current_table.rows[0].customer_session]
+      );
       if (stmt.rowCount === 0) {
         set.status = 404;
         return { message: "โต๊ะนี้ไม่มีข้อมูลหรือว่างอยู่แล้ว" };
       }
-      const closedSession = current_table.rows[0].customer_session;
+      const closedSession = current_table.rows[0].customer_session; //ดึงsession จาก tableมาา
       console.log(closedSession);
       if (closedSession) {
+        //ส่งข้อมูลผ่าน websocket ไปว่า table ปิดไปแล้ว
         server?.publish(
           closedSession,
           JSON.stringify({

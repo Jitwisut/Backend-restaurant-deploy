@@ -2,6 +2,7 @@
 import { Elysia, t } from "elysia";
 import type { ServerWebSocket } from "bun";
 import { getDB } from "../lib/connect";
+import { UUID } from "crypto";
 
 const db = getDB();
 // ================================
@@ -15,6 +16,7 @@ type MsgOrder = {
   type: "order";
   menu: unknown;
   table_number?: number | string;
+  session: UUID;
 };
 type MsgOrderStatus = {
   type: "order_status";
@@ -115,14 +117,14 @@ async function Savetodb(order: {
   id: string;
   menu: any;
   table_number: number;
-  customer_session?: string;
+  session?: UUID;
 }) {
   try {
     await db.query("BEGIN");
-
+    console.log("Customer Session Value:", order);
     await db.query(
       "INSERT INTO orders (id,table_number,customer_session,status,updated_at) VALUES ($1,$2,$3,'pending',NOW())",
-      [order.id, order.table_number, order.customer_session]
+      [order.id, order.table_number, order.session]
     );
     const items = order.menu.items;
     console.log("items", items);
@@ -365,6 +367,7 @@ async function routeMessage(
           type: "order",
           from: username,
           menu: msg.menu,
+          session: msg.session,
           table_number: msg.table_number,
           timestamp: new Date().toISOString(),
         });
@@ -375,6 +378,7 @@ async function routeMessage(
         Savetodb({
           id: orderId,
           menu: msg.menu,
+          session: msg.session,
           table_number: parseInt(String(msg.table_number)),
         });
       } catch (err) {
