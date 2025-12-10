@@ -53,6 +53,13 @@ app
         errors: error.all,
       };
     }
+    if (code === "NOT_FOUND") {
+      set.status = 400;
+      return {
+        status: "error",
+        message: "Not found page",
+      };
+    }
   })
   .use(elysiaHelmet({}))
 
