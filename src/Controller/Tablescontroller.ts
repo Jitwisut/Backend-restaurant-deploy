@@ -20,7 +20,7 @@ export const Tablecontroller = {
     await db.query("BEGIN");
     const rawNumber = body.number;
     const tableNumber = parseInt(rawNumber ?? "", 10);
-    const paddedNumber = tableNumber.toString().padStart(2, "0"); // 2 → "02"
+    //const paddedNumber = tableNumber.toString().padStart(2, "0"); // 2 → "02"
 		const nanoid = randomUUID();
     if (isNaN(tableNumber) || tableNumber < 1 || tableNumber > 99) {
       set.status = 400;
@@ -35,7 +35,7 @@ export const Tablecontroller = {
       const qrBase64 = await QRCode.toDataURL(fullURL); // ✅ async (คงไว้)
       await db.query(
         "INSERT INTO sessions (session_id,table_number,opened_at) VALUES ($1,$2,NOW())",
-        [hash, paddedNumber]
+        [hash, tableNumber]
       );
       const result = await db.query(
         `
@@ -48,7 +48,7 @@ export const Tablecontroller = {
      AND status           = 'available'
    RETURNING table_number, status, opened_at, customer_session, qr_code_url
   `,
-        [hash, qrBase64, paddedNumber]
+        [hash, qrBase64, tableNumber]
       );
 
       if (result.rowCount === 0) {
