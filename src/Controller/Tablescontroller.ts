@@ -7,7 +7,7 @@ import { notifyTableClosed } from "../router/websocket";
 const baseurl = Bun.env.ORIGIN_URL;
 const db = getDB();
 
-const nanoid = randomUUID();
+
 export const Tablecontroller = {
   gettable: async ({ set }: Context) => {
     const query = "SELECT * FROM tables";
@@ -21,7 +21,7 @@ export const Tablecontroller = {
     const rawNumber = body.number;
     const tableNumber = parseInt(rawNumber ?? "", 10);
     const paddedNumber = tableNumber.toString().padStart(2, "0"); // 2 → "02"
-
+		const nanoid = randomUUID();
     if (isNaN(tableNumber) || tableNumber < 1 || tableNumber > 99) {
       set.status = 400;
       return { message: "หมายเลขโต๊ะไม่ถูกต้อง" };
