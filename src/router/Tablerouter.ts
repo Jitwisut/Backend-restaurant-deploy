@@ -29,7 +29,7 @@ export const Tablerouter = (app: Elysia) => {
       .post("/opentable", Tablecontroller.opentable)
       .post("/closetable", Tablecontroller.closetable, {
         body: t.Object({
-          number: t.String(),
+          number: t.Number(),
         }),
       })
       .get("/checktable/:session", Tablecontroller.checktabel)
