@@ -19,21 +19,24 @@ export const Tablerouter = (app: Elysia) => {
                 "Retry-After": "60",
                 "Custom-Header": "custom",
               }),
-            }
+            },
           ),
-        })
+        }),
       )
       .get("/gettable", Tablecontroller.gettable);
     app
       .use(gettableLimit)
       .post("/opentable", Tablecontroller.opentable)
-      .post("/closetable", Tablecontroller.closetable, {
+      .post(
+        "/closetable",
+        Tablecontroller.closetable /*, {
         body: t.Object({
           number: t.Number(),
         }),
-      })
+      }*/,
+      )
       .get("/checktable/:session", Tablecontroller.checktabel)
-     
+
       .post("/ordersuccess", Tablecontroller.ordersuccess, {
         body: t.Object({
           table_number: t.Number({
