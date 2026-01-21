@@ -45,7 +45,8 @@ export const Tablerouter = (app: Elysia) => {
             error: "Quantity must be between 1-11",
           }),
         }),
-      });
+      })
+      .post("/addtable", Tablecontroller.addtable);
     return app;
   });
 };
