@@ -91,6 +91,11 @@ export const Tablecontroller = {
         `SELECT customer_session FROM tables WHERE table_number=$1  AND status <> 'available'`,
         [paddedNumber],
       );
+      if (current_table.rowCount === 0) {
+        set.status = 404;
+        return { message: "โต๊ะนี้ไม่มีข้อมูล" };
+      }
+      const closedSessionId = current_table.rows[0].customer_session;
       const stmt = await db.query(
         `
       UPDATE tables
@@ -106,7 +111,7 @@ export const Tablecontroller = {
       );
       await db.query(
         "UPDATE sessions SET closed_at=NOW() WHERE session_id=$1",
-        [current_table.rows[0].customer_session],
+        [closedSessionId],
       );
       if (stmt.rowCount === 0) {
         set.status = 404;
