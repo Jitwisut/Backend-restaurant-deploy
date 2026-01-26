@@ -8,7 +8,7 @@ let pool: any = null;
 export function getDB() {
   if (!pool) {
     pool = new Pool({
-      connectionString: Bun.env.DATABASE_URL,
+      connectionString: Bun.env.DATABASE_URL_test,
     });
     console.log("✅ DB Connected");
   }

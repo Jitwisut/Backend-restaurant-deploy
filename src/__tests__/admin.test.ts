@@ -231,7 +231,7 @@ describe("Admin Controller - Update User", () => {
         // Update the user
         const response = await app.handle(
             new Request("http://localhost/admin/updateuser", {
-                method: "PUT",
+                method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     originuser: originalUsername,
@@ -268,7 +268,7 @@ describe("Admin Controller - Update User", () => {
         // Update to 'kitchen' role
         const response = await app.handle(
             new Request("http://localhost/admin/updateuser", {
-                method: "PUT",
+                method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     originuser: username,
@@ -304,8 +304,8 @@ describe("Admin Controller - Delete User", () => {
 
         // Delete the user
         const response = await app.handle(
-            new Request("http://localhost/admin/deletedata", {
-                method: "DELETE",
+            new Request("http://localhost/admin/deleteuser", {
+                method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     username,
@@ -322,8 +322,8 @@ describe("Admin Controller - Delete User", () => {
         const app = createTestApp();
 
         const response = await app.handle(
-            new Request("http://localhost/admin/deletedata", {
-                method: "DELETE",
+            new Request("http://localhost/admin/deleteuser", {
+                method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({}),
             })
@@ -347,7 +347,7 @@ describe("Admin Controller - Upload Menu Data", () => {
         formData.append("image", createMockImageFile("test.jpg"));
 
         const response = await app.handle(
-            new Request("http://localhost/admin/uploaddata", {
+            new Request("http://localhost/admin/upload-menu", {
                 method: "POST",
                 body: formData,
             })
@@ -366,7 +366,7 @@ describe("Admin Controller - Upload Menu Data", () => {
         formData.append("image", createMockImageFile("test.jpg"));
 
         const response = await app.handle(
-            new Request("http://localhost/admin/uploaddata", {
+            new Request("http://localhost/admin/upload-menu", {
                 method: "POST",
                 body: formData,
             })
@@ -383,7 +383,7 @@ describe("Admin Controller - Upload Menu Data", () => {
         formData.append("image", createMockImageFile("test.jpg"));
 
         const response = await app.handle(
-            new Request("http://localhost/admin/uploaddata", {
+            new Request("http://localhost/admin/upload-menu", {
                 method: "POST",
                 body: formData,
             })
@@ -403,7 +403,7 @@ describe("Admin Controller - Upload Menu Data", () => {
         formData.append("image", createMockImageFile("dessert.jpg"));
 
         const response = await app.handle(
-            new Request("http://localhost/admin/uploaddata", {
+            new Request("http://localhost/admin/upload-menu", {
                 method: "POST",
                 body: formData,
             })

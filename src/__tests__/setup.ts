@@ -8,33 +8,30 @@ import pg from "pg";
  */
 
 let testDb: any = null;
-
+const connectionString =
+  "postgresql://postgres:0805555za@localhost:5432/restaurant_test";
 /**
  * Get test database connection
  * Returns a PostgreSQL connection for testing
  */
 export function getTestDB() {
-    if (!testDb) {
-        // Use test database connection
-        testDb = new pg.Pool({
-            user: process.env.DB_USER || "postgres",
-            host: process.env.DB_HOST || "localhost",
-            database: process.env.TEST_DB_NAME || "restaurant_test",
-            password: process.env.DB_PASSWORD || "postgres",
-            port: parseInt(process.env.DB_PORT || "5432"),
-        });
-    }
-    return testDb;
+  if (!testDb) {
+    // Use test database connection
+    testDb = new pg.Pool({
+      connectionString: connectionString,
+    });
+  }
+  return testDb;
 }
 
 /**
  * Setup test database schema
  */
 export async function setupTestDB() {
-    const db = getTestDB();
+  const db = getTestDB();
 
-    // Create tables
-    await db.query(`
+  // Create tables
+  await db.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       username VARCHAR(255) UNIQUE NOT NULL,
@@ -45,7 +42,7 @@ export async function setupTestDB() {
     )
   `);
 
-    await db.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS menu_new (
       id SERIAL PRIMARY KEY,
       name VARCHAR(255) NOT NULL,
@@ -58,7 +55,7 @@ export async function setupTestDB() {
     )
   `);
 
-    await db.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS tables (
       id SERIAL PRIMARY KEY,
       table_number VARCHAR(10) UNIQUE NOT NULL,
@@ -70,7 +67,7 @@ export async function setupTestDB() {
     )
   `);
 
-    await db.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS sessions (
       id SERIAL PRIMARY KEY,
       session_id VARCHAR(255) UNIQUE NOT NULL,
@@ -81,7 +78,7 @@ export async function setupTestDB() {
     )
   `);
 
-    await db.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS orders (
       id SERIAL PRIMARY KEY,
       table_number INTEGER NOT NULL,
@@ -91,7 +88,7 @@ export async function setupTestDB() {
     )
   `);
 
-    await db.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS order_items (
       id SERIAL PRIMARY KEY,
       order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
@@ -107,72 +104,72 @@ export async function setupTestDB() {
  * Clean test database
  */
 export async function cleanTestDB() {
-    const db = getTestDB();
+  const db = getTestDB();
 
-    // Delete all data in reverse order of dependencies
-    await db.query("DELETE FROM order_items");
-    await db.query("DELETE FROM orders");
-    await db.query("DELETE FROM sessions");
-    await db.query("DELETE FROM tables");
-    await db.query("DELETE FROM menu_new");
-    await db.query("DELETE FROM users");
+  // Delete all data in reverse order of dependencies
+  await db.query("DELETE FROM order_items");
+  await db.query("DELETE FROM orders");
+  await db.query("DELETE FROM sessions");
+  await db.query("DELETE FROM tables");
+  await db.query("DELETE FROM menu_new");
+  await db.query("DELETE FROM users");
 }
 
 /**
  * Drop test database tables
  */
 export async function teardownTestDB() {
-    const db = getTestDB();
+  const db = getTestDB();
 
-    await db.query("DROP TABLE IF EXISTS order_items CASCADE");
-    await db.query("DROP TABLE IF EXISTS orders CASCADE");
-    await db.query("DROP TABLE IF EXISTS sessions CASCADE");
-    await db.query("DROP TABLE IF EXISTS tables CASCADE");
-    await db.query("DROP TABLE IF EXISTS menu_new CASCADE");
-    await db.query("DROP TABLE IF EXISTS users CASCADE");
+  await db.query("DROP TABLE IF EXISTS order_items CASCADE");
+  await db.query("DROP TABLE IF EXISTS orders CASCADE");
+  await db.query("DROP TABLE IF EXISTS sessions CASCADE");
+  await db.query("DROP TABLE IF EXISTS tables CASCADE");
+  await db.query("DROP TABLE IF EXISTS menu_new CASCADE");
+  await db.query("DROP TABLE IF EXISTS users CASCADE");
 }
 
 /**
  * Close test database connection
  */
 export async function closeTestDB() {
-    if (testDb) {
-        await testDb.end();
-        testDb = null;
-    }
+  if (testDb) {
+    await testDb.end();
+    testDb = null;
+  }
 }
 
 /**
  * Seed test data
  */
 export async function seedTestData() {
-    const db = getTestDB();
+  const db = getTestDB();
 
-    // Add a test user (password: password123)
-    await db.query(
-        `INSERT INTO users (username, email, password, role) 
+  // Add a test user (password: password123)
+  await db.query(
+    `INSERT INTO users (username, email, password, role) 
      VALUES ($1, $2, $3, $4)`,
-        [
-            "testuser",
-            "test@example.com",
-            "$2a$10$YourHashedPasswordHere", // bcrypt hash for "password123"
-            "user",
-        ]
-    );
+    [
+      "testuser",
+      "test@example.com",
+      "$2a$10$YourHashedPasswordHere", // bcrypt hash for "password123"
+      "user",
+    ],
+  );
 
-    // Add test menu items
-    await db.query(
-        `INSERT INTO menu_new (name, price, category, description) 
+  // Add test menu items
+  await db.query(
+    `INSERT INTO menu_new (name, price, category, description) 
      VALUES ($1, $2, $3, $4)`,
-        ["Pad Thai", "120", "Main Course", "Traditional Thai noodles"]
-    );
+    ["Pad Thai", "120", "Main Course", "Traditional Thai noodles"],
+  );
 
-    // Add test tables
-    for (let i = 1; i <= 5; i++) {
-        const tableNum = i.toString().padStart(2, "0");
-        await db.query(
-            `INSERT INTO tables (table_number, status) VALUES ($1, $2)`,
-            [tableNum, "available"]
-        );
-    }
+  // Add test tables
+  for (let i = 1; i <= 5; i++) {
+    const tableNum = i.toString().padStart(2, "0");
+    await db.query(
+      `INSERT INTO tables (table_number, status) VALUES ($1, $2)`,
+      [tableNum, "available"],
+    );
+  }
 }
