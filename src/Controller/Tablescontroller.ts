@@ -80,7 +80,7 @@ export const Tablecontroller = {
   }) => {
     const rawNumber = body.number;
     const tableNumber = parseInt(rawNumber ?? "", 10);
-    const paddedNumber = tableNumber.toString().padStart(2, "0"); // 2 → "02"
+    //const paddedNumber = tableNumber.toString().padStart(2, "0"); // 2 → "02"
     if (isNaN(tableNumber) || tableNumber < 1 || tableNumber > 99) {
       set.status = 400;
       return { message: "หมายเลขโต๊ะไม่ถูกต้อง" };
@@ -89,7 +89,7 @@ export const Tablecontroller = {
     try {
       const current_table = await db.query(
         `SELECT customer_session FROM tables WHERE table_number=$1  AND status <> 'available'`,
-        [paddedNumber],
+        [tableNumber],
       );
       if (current_table.rowCount === 0) {
         set.status = 404;
@@ -107,7 +107,7 @@ export const Tablecontroller = {
          AND status <> 'available'
          
     `,
-        [paddedNumber],
+        [tableNumber],
       );
       await db.query(
         "UPDATE sessions SET closed_at=NOW() WHERE session_id=$1",
@@ -194,10 +194,10 @@ export const Tablecontroller = {
     try {
       await db.query("BEGIN");
       const result = await db.query(
-        "INSERT INTO tables (table_number, status) VALUES ((SELECT COALESCE(MAX(table_number), 0) + 1 FROM tables), 'available') RETURNING table_number",
+        "INSERT INTO tables (table_number, status) VALUES ((SELECT COALESCE(MAX(table_number::integer), 0) + 1 FROM tables), 'available') RETURNING table_number",
       );
       await db.query("COMMIT");
-      const newtablenumber = result.rows[0].table_number;
+      const newtablenumber = parseInt(result.rows[0].table_number);
       return {
         success: true,
         message: `เพิ่มโต๊ะหมายเลข ${newtablenumber}เรียบร้อยแล้ว`,

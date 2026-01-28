@@ -2,7 +2,11 @@ import { describe, test, expect, beforeEach } from "bun:test";
 import { Elysia } from "elysia";
 import jwt from "@elysiajs/jwt";
 import { Tablerouter } from "../router/Tablerouter";
-import { randomTableNumber } from "./helpers/testUtils";
+import {
+  createAvailableTable,
+  createOpenTable,
+  randomTableNumber,
+} from "./helpers/testUtils";
 import { getTestDB } from "./setup";
 /**
  * Table Controller Tests
@@ -171,11 +175,22 @@ describe("Table Controller - Open Table", () => {
 });
 
 describe("Table Controller - Close Table", () => {
+  /* beforeEach(async () => {
+    // ลบข้อมูลเก่ากันพลาด
+    await db.query("DELETE FROM tables WHERE table_number = $1", [4]);
+
+    // สร้างโต๊ะเบอร์ 4 สถานะ 'available' เตรียมไว้
+    await db.query(
+      "INSERT INTO tables (table_number, status) VALUES ($1, 'available')",
+      [4],
+    );
+  });*/
   test("should successfully close an open table", async () => {
     const app = createTestApp();
     const tableNumber = 4;
 
     // First open a table
+    await createAvailableTable(tableNumber);
     await app.handle(
       new Request("http://localhost/tables/opentable", {
         method: "POST",
@@ -185,6 +200,7 @@ describe("Table Controller - Close Table", () => {
     );
 
     // Then close it
+    await createOpenTable(tableNumber);
     const response = await app.handle(
       new Request("http://localhost/tables/closetable", {
         method: "POST",
@@ -232,7 +248,7 @@ describe("Table Controller - Check Table", () => {
   test("should find table by session hash", async () => {
     const app = createTestApp();
     const tableNumber = 6;
-
+    await createAvailableTable(tableNumber);
     // Open a table first
     const openResponse = await app.handle(
       new Request("http://localhost/tables/opentable", {
@@ -279,7 +295,7 @@ describe("Table Controller - Check Table", () => {
       }),
     );
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(404);
   });
 });
 

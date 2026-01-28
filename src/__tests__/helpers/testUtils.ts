@@ -1,8 +1,9 @@
 import { expect } from "bun:test";
-
+import { getTestDB } from "../setup";
 /**
  * Helper function to create a test user
  */
+const db = getTestDB();
 export function createTestUser(overrides: any = {}) {
   return {
     username: "testuser",
@@ -125,3 +126,32 @@ export function decodeJWT(token: string) {
   const payload = Buffer.from(parts[1], "base64").toString();
   return JSON.parse(payload);
 }
+export const createAvailableTable = async (tableNumber: number) => {
+  // ลบของเก่า (ถ้ามี)
+  await db.query("DELETE FROM tables WHERE table_number = $1", [tableNumber]);
+  // สร้างใหม่
+  await db.query(
+    "INSERT INTO tables (table_number, status) VALUES ($1, 'available')",
+    [tableNumber],
+  );
+};
+
+export const createOpenTable = async (tableNumber: number) => {
+  await createAvailableTable(tableNumber); // สร้างโต๊ะเปล่าก่อน
+  // อัปเดตให้เป็นสถานะ Open (จำลองว่ามีคนเปิดแล้ว)
+  const sessionId = "test-session-hash-" + tableNumber;
+  await db.query(
+    `
+        UPDATE tables 
+        SET status = 'open', customer_session = $1, opened_at = NOW() 
+        WHERE table_number = $2
+    `,
+    [sessionId, tableNumber],
+  );
+
+  // ต้อง insert session ด้วยเพราะ code คุณมีการ join หรือ check session
+  await db.query(
+    "INSERT INTO sessions (session_id, table_number, opened_at) VALUES ($1, $2, NOW()) ON CONFLICT DO NOTHING",
+    [sessionId, tableNumber],
+  );
+};
