@@ -54,6 +54,7 @@ jobs:
           echo "DB_NAME=restaurant_test" >> .env
           echo "JWT_SECRET=super-secret-test-key-for-ci" >> .env
           echo "ORIGIN_URL=http://localhost:3000" >> .env
+          echo "DATABASE_URL=postgres://postgres:${{secrets.DBPASSWORD}}@localhost:5432/restaurant_test" >> .env
 
       # 7. เริ่มรัน Test
       - name: Run Tests
@@ -65,5 +66,4 @@ jobs:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.ORG_ID }}
           vercel-project-id: ${{ secrets.PROJECT_ID }}
-          vercel-args: '--prod'
-
+          vercel-args: "--prod"
