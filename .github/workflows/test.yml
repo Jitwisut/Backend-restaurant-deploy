@@ -54,7 +54,7 @@ jobs:
           echo "DB_NAME=restaurant_test" >> .env
           echo "JWT_SECRET=super-secret-test-key-for-ci" >> .env
           echo "ORIGIN_URL=http://localhost:3000" >> .env
-          echo "DATABASE_URL=postgres://postgres:${{secrets.DBPASSWORD}}@localhost:5432/restaurant_test" >> .env
+          echo "DATABASE_URL=postgres://postgres:password@localhost:5432/restaurant_test" >> .env
 
       # 7. เริ่มรัน Test
       - name: Run Tests
