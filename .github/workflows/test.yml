@@ -50,13 +50,13 @@ jobs:
           echo "JWT_SECRET=super-secret-test-key-for-ci" >> .env
           echo "ORIGIN_URL=http://localhost:3000" >> .env
           # ใส่ DATABASE_URL ลงไฟล์ด้วย (เผื่อ Code อ่านจากไฟล์)
-          echo "DATABASE_URL=postgres://postgres:password@localhost:5432/restaurant_test" >> .env
+          echo "DATABASE_URL=postgres://postgres:password@postgres:5432/restaurant_test" >> .env
 
       # 7. เริ่มรัน Test (ไม้ตาย: ยัดตัวแปรเข้าคำสั่งโดยตรง)
       - name: Run Tests
         env:
           # บังคับใช้ค่านี้แน่นอน 100% ตรงกับ Service ข้างบนเป๊ะๆ
-          DATABASE_URL: "postgres://postgres:password@localhost:5432/restaurant_test"
+          DATABASE_URL: "postgres://postgres:password@postgres:5432/restaurant_test"
         run: bun test
 
       # 8. Deploy (จะทำงานเมื่อ Test ผ่านเท่านั้น)
