@@ -15,4 +15,4 @@ export function getDB() {
   return pool;
 }
 
-export const db = getDB();
+//export const db = getDB();
