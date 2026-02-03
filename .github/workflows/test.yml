@@ -55,7 +55,7 @@ jobs:
       - name: Setup Database
         env:
           DATABASE_URL: "postgres://postgres:password@localhost:5432/restaurant_test"
-        run: bun src/setup.ts
+        run: bun src/__tests__/setup.ts
 
       # 7. เริ่มรัน Test (ไม้ตาย: ยัดตัวแปรเข้าคำสั่งโดยตรง)
       - name: Run Tests
