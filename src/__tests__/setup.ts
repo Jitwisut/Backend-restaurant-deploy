@@ -174,3 +174,26 @@ export async function seedTestData() {
     );
   }
 }
+if (import.meta.main) {
+  (async () => {
+    try {
+      console.log("🚀 Starting Database Setup...");
+      
+      // 1. สร้างตาราง
+      await setupTestDB();
+      
+      // 2. ใส่ข้อมูลทดสอบ (Seed)
+      await seedTestData();
+      
+      console.log("🏁 Database Setup Complete!");
+      
+      // 3. ปิด Connection
+      await closeTestDB();
+      
+      process.exit(0);
+    } catch (error) {
+      console.error("💀 Setup Failed:", error);
+      process.exit(1);
+    }
+  })();
+}
