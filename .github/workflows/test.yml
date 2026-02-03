@@ -65,10 +65,7 @@ jobs:
         run: bun test
 
       # 8. Deploy (จะทำงานเมื่อ Test ผ่านเท่านั้น)
-#      - name: Deploy to Vercel Action
-#        uses: amondnet/vercel-action@v25
-#        with:
-#          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-#          vercel-org-id: ${{ secrets.ORG_ID }}
-#          vercel-project-id: ${{ secrets.PROJECT_ID }}
-#          vercel-args: "--prod"
+      - name: Deploy to Render
+        if: success()
+        run: |
+          curl -X post ${{secrets.RENDER_DEPLOY_HOOK_URL}}
