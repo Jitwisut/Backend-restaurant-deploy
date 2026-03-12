@@ -39,7 +39,7 @@ describe("Order Controller - Order History", () => {
     expect(Array.isArray(data.order)).toBe(true);
   });
 
-  test("should return 404 when table number is missing", async () => {
+  test("should return all orders (status 200) when table number is missing", async () => {
     const app = createTestApp();
 
     const response = await app.handle(
@@ -50,9 +50,10 @@ describe("Order Controller - Order History", () => {
       }),
     );
 
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(200);
     const data = await response.json();
-    expect(data.message).toContain("No table number");
+    expect(data.order).toBeDefined();
+    expect(Array.isArray(data.order)).toBe(true);
   });
 
   test("should return order with correct structure", async () => {
