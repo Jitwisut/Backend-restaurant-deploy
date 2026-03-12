@@ -9,7 +9,6 @@ import pg from "pg";
 
 let testDb: any = null;
 const connectionString =
-  process.env.DATABASE_URL ||
   "postgresql://postgres:0805555za@localhost:5432/restaurant_test";
 /**
  * Get test database connection
@@ -178,18 +177,18 @@ if (import.meta.main) {
   (async () => {
     try {
       console.log("🚀 Starting Database Setup...");
-      
+
       // 1. สร้างตาราง
       await setupTestDB();
-      
+
       // 2. ใส่ข้อมูลทดสอบ (Seed)
       await seedTestData();
-      
+
       console.log("🏁 Database Setup Complete!");
-      
+
       // 3. ปิด Connection
       await closeTestDB();
-      
+
       process.exit(0);
     } catch (error) {
       console.error("💀 Setup Failed:", error);

@@ -11,10 +11,10 @@ export const Orderscontroller = {
     body: { table_number: Number };
   }) => {
     const tablenumber = body.table_number;
-    if (!tablenumber) {
-      set.status = 404;
-      return { message: "No table number" };
-    }
+    /* if (!tablenumber) {
+       set.status = 404;
+       return { message: "No table number" };
+     }*/
     const result = await db.query(` SELECT 
       o.table_number,
       o.id,
