@@ -8,7 +8,7 @@ import pg from "pg";
  */
 
 let testDb: any = null;
-const connectionString =
+const connectionString = process.env.DATABASE_URL ||
   "postgresql://postgres:0805555za@localhost:5432/restaurant_test";
 /**
  * Get test database connection
