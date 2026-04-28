@@ -13,7 +13,7 @@ export const beforeadmin = async (context: Context) => {
   const decode = await jwt.verify(token);
   
 
-  if (decode.role !== "admin") {
+  if (!["admin", "owner", "superadmin"].includes(decode.role)) {
     set.status = 403;
     return { message: "Forbidden: Not an admin" };
   }

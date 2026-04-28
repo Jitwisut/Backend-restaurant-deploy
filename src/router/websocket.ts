@@ -1,8 +1,8 @@
-// src/router/websocket.ts
 import { Elysia, t } from "elysia";
 import type { ServerWebSocket } from "bun";
 import { getDB } from "../lib/connect";
 import { UUID } from "crypto";
+import { normalizeRestaurantId } from "../middleware/restaurantScope";
 
 const db = getDB();
 // ================================
@@ -35,15 +35,27 @@ type Msgcallstaff = {
   type: "call_staff";
   table_number: number | string;
 };
-const sockets: Record<Role, Map<string, ServerWebSocket<any>>> = {
-  user: new Map(),
-  kitchen: new Map(),
-  admin: new Map(),
-};
+
+// ================================
+// MULTI-TENANT ISOLATION
+// ================================
+const sockets = new Map<string, Record<Role, Map<string, ServerWebSocket<any>>>>();
+
+function getRestaurantSockets(restaurantId: string) {
+  if (!sockets.has(restaurantId)) {
+    sockets.set(restaurantId, {
+      user: new Map(),
+      kitchen: new Map(),
+      admin: new Map(),
+    });
+  }
+  return sockets.get(restaurantId)!;
+}
 
 interface Client {
   ws: ServerWebSocket;
   role: Role;
+  restaurant_id: string;
 }
 const clients = new Map<string, Client>();
 
@@ -52,9 +64,10 @@ const clients = new Map<string, Client>();
 // ================================
 const td = new TextDecoder();
 
-async function validateTable(tablesNumber: number): Promise<boolean> {
+async function validateTable(tablesNumber: number, restaurantId: string): Promise<boolean> {
   const result = await db.query(
-    "SELECT tables_number,status FROM tables WHERE tables_number=$1"
+    "SELECT table_number,status FROM tables WHERE table_number=$1 AND restaurant_id=$2",
+    [tablesNumber, restaurantId]
   );
   if (result.rows.length === 0) {
     return false; //ไม่มีโต๊ะนี้
@@ -65,14 +78,15 @@ async function validateTable(tablesNumber: number): Promise<boolean> {
   }
   return true;
 }
-async function updateTableStatus(tableNumber: number, status: string) {
+
+async function updateTableStatus(tableNumber: number, status: string, restaurantId: string) {
   await db.query(
-    "UPDATE tables SET status =$1, opened_at=NOW() WHERE tables_number=$2",
-    [status, tableNumber]
+    "UPDATE tables SET status =$1, opened_at=NOW() WHERE table_number=$2 AND restaurant_id=$3",
+    [status, tableNumber, restaurantId]
   );
 }
 
-async function generateOrderId(): Promise<string> {
+async function generateOrderId(restaurantId: string): Promise<string> {
   const date = new Date();
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -83,10 +97,10 @@ async function generateOrderId(): Promise<string> {
     // หา order ล่าสุดของวันนี้จาก database
     const result = await db.query(
       `SELECT id FROM orders 
-       WHERE id LIKE $1 
+       WHERE id LIKE $1 AND restaurant_id = $2
        ORDER BY id DESC 
        LIMIT 1`,
-      [`ORD-${datePrefix}-%`]
+      [`ORD-${datePrefix}-%`, restaurantId]
     );
 
     let sequence = 1;
@@ -117,23 +131,24 @@ async function Savetodb(order: {
   id: string;
   menu: any;
   table_number: number;
+  restaurant_id: string;
   session?: UUID;
 }) {
   try {
     await db.query("BEGIN");
     console.log("Customer Session Value:", order);
     await db.query(
-      "INSERT INTO orders (id,table_number,customer_session,status,updated_at) VALUES ($1,$2,$3,'pending',NOW())",
-      [order.id, order.table_number, order.session]
+      "INSERT INTO orders (id,table_number,customer_session,status,updated_at,restaurant_id) VALUES ($1,$2,$3,'pending',NOW(),$4)",
+      [order.id, order.table_number, order.session, order.restaurant_id]
     );
     const items = order.menu.items;
     console.log("items", items);
     if (Array.isArray(order.menu.items)) {
       for (const item of items) {
         await db.query(
-          `INSERT INTO order_items (order_id, menu_item_name, quantity, price, notes)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [order.id, item.name, item.qty, item.price, item.notes || null]
+          `INSERT INTO order_items (order_id, menu_item_name, quantity, price, notes, restaurant_id)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [order.id, item.name, item.qty, item.price, item.notes || null, order.restaurant_id]
         );
       }
     }
@@ -223,21 +238,33 @@ export const web = (app: Elysia) => {
           default: "user",
         }
       ),
+      restaurant_id: t.Optional(t.String()),
+      token: t.Optional(t.String()),
     }),
 
-    open(ws) {
+    async open(ws) {
       const username = ws.data.params.user as string;
       const role = ws.data.query.role as Role;
+      const token = ws.data.query.token;
+      const payload =
+        token && (ws.data as any).jwt
+          ? await (ws.data as any).jwt.verify(token)
+          : null;
+      const restaurant_id = String(
+        normalizeRestaurantId(payload?.restaurant_id ?? ws.data.query.restaurant_id),
+      );
 
-      sockets[role].set(username, (ws as any).raw);
-      clients.set(username, { ws: (ws as any).raw, role });
+      const restSockets = getRestaurantSockets(restaurant_id);
+      restSockets[role].set(username, (ws as any).raw);
+      clients.set(username, { ws: (ws as any).raw, role, restaurant_id });
       ws.subscribe(username);
+      
       sendJSON(ws as any, {
         type: "system",
-        message: `เชื่อมต่อสำเร็จในชื่อ ${username} (Role: ${role})`,
+        message: `เชื่อมต่อสำเร็จในชื่อ ${username} (Role: ${role}, Restaurant: ${restaurant_id})`,
       });
 
-      console.log(`[WS OPEN] ${username} (${role}) connected`);
+      console.log(`[WS OPEN] ${username} (${role}) connected to restaurant ${restaurant_id}`);
     },
 
     message(ws, msg) {
@@ -285,7 +312,8 @@ export const web = (app: Elysia) => {
       const username = ws.data.params.user as string;
       const client = clients.get(username);
       if (client) {
-        sockets[client.role].delete(username);
+        const restSockets = getRestaurantSockets(client.restaurant_id);
+        restSockets[client.role].delete(username);
         clients.delete(username);
       }
       console.log(
@@ -303,6 +331,7 @@ async function routeMessage(
   msg: IncomingMsg
 ) {
   const { ws, username, sender } = ctx;
+  const restSockets = getRestaurantSockets(sender.restaurant_id);
 
   switch (msg.type) {
     case "ping": {
@@ -319,10 +348,10 @@ async function routeMessage(
         return;
       }
       const recipient = clients.get(msg.to);
-      if (!recipient) {
+      if (!recipient || recipient.restaurant_id !== sender.restaurant_id) {
         sendJSON(ws, {
           type: "error",
-          message: `ไม่พบผู้ใช้ ${msg.to} หรือไม่ได้เชื่อมต่อ`,
+          message: `ไม่พบผู้ใช้ ${msg.to} หรือไม่ได้เชื่อมต่อ (หรืออยู่คนละร้าน)`,
         });
         return;
       }
@@ -356,7 +385,7 @@ async function routeMessage(
         return;
       }
 
-      const kitchenClients = Array.from(sockets.kitchen.entries());
+      const kitchenClients = Array.from(restSockets.kitchen.entries());
       if (kitchenClients.length === 0) {
         sendJSON(ws, { type: "error", message: "ไม่พบครัวที่เชื่อมต่ออยู่" });
         return;
@@ -373,13 +402,14 @@ async function routeMessage(
         });
       });
 
-      const orderId = await generateOrderId();
+      const orderId = await generateOrderId(sender.restaurant_id);
       try {
-        Savetodb({
+        await Savetodb({
           id: orderId,
           menu: msg.menu,
           session: msg.session,
           table_number: parseInt(String(msg.table_number)),
+          restaurant_id: sender.restaurant_id,
         });
       } catch (err) {
         console.error("Error savedb", (err as Error).message);
@@ -405,10 +435,10 @@ async function routeMessage(
       }
 
       const recipient = clients.get(msg.to);
-      if (!recipient) {
+      if (!recipient || recipient.restaurant_id !== sender.restaurant_id) {
         sendJSON(ws, {
           type: "error",
-          message: `ไม่พบผู้ใช้ ${msg.to} หรือไม่ได้เชื่อมต่อ`,
+          message: `ไม่พบผู้ใช้ ${msg.to} หรือไม่ได้เชื่อมต่อ (หรืออยู่คนละร้าน)`,
         });
         return;
       }
@@ -430,7 +460,8 @@ async function routeMessage(
         });
         return;
       }
-      const adminEntries = Array.from(sockets.admin.values());
+      
+      const adminEntries = Array.from(restSockets.admin.values());
       if (adminEntries.length === 0) {
         sendJSON(ws, {
           type: "error",

@@ -4,6 +4,7 @@
   "scripts": {
     "test": "bun test",
     "test:watch": "bun test --watch",
+    "migrate:multi-tenant": "bun run src/scripts/run-migration.ts db/migrations/001_multi_tenant_mvp.sql",
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts"
   },
@@ -16,6 +17,7 @@
     "elysia": "^1.4.18",
     "elysia-rate-limit": "^4.4.2",
     "elysiajs-helmet": "^1.0.2",
+    "ioredis": "^5.10.0",
     "nanoid": "^5.1.5",
     "pg": "^8.16.3",
     "qrcode": "^1.5.4"

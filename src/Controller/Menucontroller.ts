@@ -1,10 +1,12 @@
 import { Context } from "elysia";
 import { getDB } from "../lib/connect";
+import { getRestaurantScope } from "../middleware/restaurantScope";
 const db = getDB();
 export const menucontroller = {
-  getmenu: async ({ set }: { set: Context["set"] }) => {
-    const query = "SELECT * FROM menu_new";
-    const result = await db.query(query);
+  getmenu: async (context: Context & { jwt?: any }) => {
+    const { restaurantId } = await getRestaurantScope(context);
+    const query = "SELECT * FROM menu_new WHERE restaurant_id=$1";
+    const result = await db.query(query, [restaurantId]);
     const menu = result.rows.map((r: any) => {
       const base64 = r.image_blob
         ? Buffer.from(r.image_blob).toString("base64")

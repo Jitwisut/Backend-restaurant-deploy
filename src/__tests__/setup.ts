@@ -32,12 +32,26 @@ export async function setupTestDB() {
 
   // Create tables
   await db.query(`
+    CREATE TABLE IF NOT EXISTS restaurants (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      slug VARCHAR(100) UNIQUE NOT NULL,
+      owner_id INTEGER,
+      status VARCHAR(50) DEFAULT 'pending',
+      plan VARCHAR(50) DEFAULT 'free',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await db.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       username VARCHAR(255) UNIQUE NOT NULL,
       email VARCHAR(255) UNIQUE NOT NULL,
       password VARCHAR(255) NOT NULL,
       role VARCHAR(50) NOT NULL,
+      restaurant_id INTEGER NOT NULL REFERENCES restaurants(id),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -51,6 +65,7 @@ export async function setupTestDB() {
       description TEXT,
       image_blob BYTEA,
       image_mime VARCHAR(50),
+      restaurant_id INTEGER NOT NULL REFERENCES restaurants(id),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -58,12 +73,14 @@ export async function setupTestDB() {
   await db.query(`
     CREATE TABLE IF NOT EXISTS tables (
       id SERIAL PRIMARY KEY,
-      table_number VARCHAR(10) UNIQUE NOT NULL,
+      table_number VARCHAR(10) NOT NULL,
       status VARCHAR(50) DEFAULT 'available',
       opened_at TIMESTAMP,
       customer_session VARCHAR(255),
       qr_code_url TEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      restaurant_id INTEGER NOT NULL REFERENCES restaurants(id),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (restaurant_id, table_number)
     )
   `);
 
@@ -74,6 +91,7 @@ export async function setupTestDB() {
       table_number INTEGER,
       opened_at TIMESTAMP,
       closed_at TIMESTAMP,
+      restaurant_id INTEGER NOT NULL REFERENCES restaurants(id),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -84,6 +102,7 @@ export async function setupTestDB() {
       table_number INTEGER NOT NULL,
       customer_session VARCHAR(255),
       status VARCHAR(50) DEFAULT 'pending',
+      restaurant_id INTEGER NOT NULL REFERENCES restaurants(id),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -95,6 +114,8 @@ export async function setupTestDB() {
       menu_item_name VARCHAR(255) NOT NULL,
       quantity INTEGER NOT NULL,
       price DECIMAL(10, 2) NOT NULL,
+      notes TEXT,
+      restaurant_id INTEGER NOT NULL REFERENCES restaurants(id),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -113,6 +134,7 @@ export async function cleanTestDB() {
   await db.query("DELETE FROM tables");
   await db.query("DELETE FROM menu_new");
   await db.query("DELETE FROM users");
+  await db.query("DELETE FROM restaurants");
 }
 
 /**
@@ -127,6 +149,7 @@ export async function teardownTestDB() {
   await db.query("DROP TABLE IF EXISTS tables CASCADE");
   await db.query("DROP TABLE IF EXISTS menu_new CASCADE");
   await db.query("DROP TABLE IF EXISTS users CASCADE");
+  await db.query("DROP TABLE IF EXISTS restaurants CASCADE");
 }
 
 /**
@@ -145,31 +168,39 @@ export async function closeTestDB() {
 export async function seedTestData() {
   const db = getTestDB();
 
+  await db.query(
+    `INSERT INTO restaurants (id, name, slug, status, plan)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (id) DO NOTHING`,
+    [1, "Default Restaurant", "default", "active", "free"],
+  );
+
   // Add a test user (password: password123)
   await db.query(
-    `INSERT INTO users (username, email, password, role) 
-     VALUES ($1, $2, $3, $4)`,
+    `INSERT INTO users (username, email, password, role, restaurant_id) 
+     VALUES ($1, $2, $3, $4, $5)`,
     [
       "testuser",
       "test@example.com",
       "$2a$10$YourHashedPasswordHere", // bcrypt hash for "password123"
       "user",
+      1,
     ],
   );
 
   // Add test menu items
   await db.query(
-    `INSERT INTO menu_new (name, price, category, description) 
-     VALUES ($1, $2, $3, $4)`,
-    ["Pad Thai", "120", "Main Course", "Traditional Thai noodles"],
+    `INSERT INTO menu_new (name, price, category, description, restaurant_id) 
+     VALUES ($1, $2, $3, $4, $5)`,
+    ["Pad Thai", "120", "Main Course", "Traditional Thai noodles", 1],
   );
 
   // Add test tables
   for (let i = 1; i <= 5; i++) {
     const tableNum = i.toString().padStart(2, "0");
     await db.query(
-      `INSERT INTO tables (table_number, status) VALUES ($1, $2)`,
-      [tableNum, "available"],
+      `INSERT INTO tables (table_number, status, restaurant_id) VALUES ($1, $2, $3)`,
+      [tableNum, "available", 1],
     );
   }
 }

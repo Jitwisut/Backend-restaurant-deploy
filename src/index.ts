@@ -12,6 +12,7 @@ import { menurouter } from "./router/menurouter";
 import { web } from "./router/websocket";
 import { profilerouter } from "./router/Profilerouter";
 import { Orderrouter } from "./router/Orderrouter";
+import { RestaurantRouter } from "./router/RestaurantRouter";
 const port = Number(Bun.env.PORT);
 const jwtsecret = Bun.env.JWT_SECRET as string;
 const url = Bun.env.ORIGIN_URL;
@@ -78,6 +79,7 @@ app
   .use(Tablerouter)
   .use(Adminrouter)
   .use(Auths)
+  .use(RestaurantRouter)
   .use(menurouter)
   .use(Orderrouter)
   .use(web)

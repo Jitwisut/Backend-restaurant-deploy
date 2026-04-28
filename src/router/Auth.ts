@@ -23,9 +23,15 @@ export const Auths = (app: Elysia) => {
             t.Literal("admin"),
             t.Literal("user"),
             t.Literal("kitchen"),
+            t.Literal("owner"),
+            t.Literal("staff"),
+            t.Literal("superadmin"),
           ]),
+          restaurant_name: t.Optional(t.String()),
+          restaurant_slug: t.Optional(t.String()),
         }),
-      });
+      })
+      .post("/test", Authcontroller.test);
     return app;
   });
 };

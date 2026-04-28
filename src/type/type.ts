@@ -10,9 +10,10 @@ export interface User {
 export interface Store {
   decode?: {
     decode: {
-      role: "admin" | "user" | "kitchen";
+      role: "admin" | "user" | "kitchen" | "owner" | "staff" | "superadmin";
       username: string;
       email: string;
+      restaurant_id?: number;
       iat: number;
     };
   };
