@@ -1,14 +1,26 @@
 import { Elysia, t } from "elysia";
 import type { ServerWebSocket } from "bun";
-import { getDB } from "../lib/connect";
 import { UUID } from "crypto";
-import { normalizeRestaurantId } from "../middleware/restaurantScope";
+import { getDB } from "../lib/connect";
+import {
+  buildGuestSessionUsername,
+  findActiveSessionByHash,
+  GUEST_SESSION_TOKEN_TYPE,
+  isGuestSessionPayload,
+} from "../lib/guestSession";
+import {
+  getRestaurantSubscriptionSnapshot,
+  isSubscriptionBlocked,
+} from "../lib/subscription";
+import {
+  getRestaurantStatusById,
+  normalizeRestaurantId,
+} from "../middleware/restaurantScope";
 
 const db = getDB();
-// ================================
-// SECTION A — Types & Stores
-// ================================
+
 type Role = "user" | "kitchen" | "admin";
+type JwtRole = Role | "owner" | "staff" | "superadmin";
 
 type MsgPing = { type: "ping" };
 type MsgMessage = { type: "message"; to: string; content: string };
@@ -24,21 +36,18 @@ type MsgOrderStatus = {
   order_id: string;
   status: "accepted" | "preparing" | "done" | "rejected";
 };
+type MsgCallStaff = {
+  type: "call_staff";
+  table_number: number | string;
+};
 type IncomingMsg =
   | MsgPing
   | MsgMessage
   | MsgOrder
-  | Msgcallstaff
+  | MsgCallStaff
   | MsgOrderStatus
   | { type: string };
-type Msgcallstaff = {
-  type: "call_staff";
-  table_number: number | string;
-};
 
-// ================================
-// MULTI-TENANT ISOLATION
-// ================================
 const sockets = new Map<string, Record<Role, Map<string, ServerWebSocket<any>>>>();
 
 function getRestaurantSockets(restaurantId: string) {
@@ -55,34 +64,63 @@ function getRestaurantSockets(restaurantId: string) {
 interface Client {
   ws: ServerWebSocket;
   role: Role;
+  jwt_role: JwtRole;
   restaurant_id: string;
+  username: string;
+  session_id?: string;
+  table_number?: string;
+  token_type?: string;
 }
-const clients = new Map<string, Client>();
 
-// ================================
-// SECTION B — Helpers
-// ================================
+const clients = new Map<string, Client>();
 const td = new TextDecoder();
 
-async function validateTable(tablesNumber: number, restaurantId: string): Promise<boolean> {
-  const result = await db.query(
-    "SELECT table_number,status FROM tables WHERE table_number=$1 AND restaurant_id=$2",
-    [tablesNumber, restaurantId]
-  );
-  if (result.rows.length === 0) {
-    return false; //ไม่มีโต๊ะนี้
-  }
-  const tableStatus = result.rows[0].status;
-  if (tableStatus !== "avaliable") {
-    return false; //โต๊ะไม่พร้อมใช้งาน
-  }
-  return true;
+function clientKey(restaurantId: string, username: string) {
+  return `${restaurantId}:${username}`;
 }
 
-async function updateTableStatus(tableNumber: number, status: string, restaurantId: string) {
-  await db.query(
-    "UPDATE tables SET status =$1, opened_at=NOW() WHERE table_number=$2 AND restaurant_id=$3",
-    [status, tableNumber, restaurantId]
+function getClient(restaurantId: string, username: string) {
+  return clients.get(clientKey(restaurantId, username));
+}
+
+function mapJwtRoleToSocketRole(role: JwtRole): Role {
+  if (role === "owner" || role === "staff" || role === "superadmin") {
+    return "admin";
+  }
+  return role;
+}
+
+async function validateTable(
+  tableNumber: number,
+  restaurantId: string,
+  sessionId: string,
+): Promise<boolean> {
+  const result = await db.query(
+    `SELECT table_number, status
+       FROM tables
+      WHERE table_number = $1
+        AND restaurant_id = $2
+        AND customer_session::text = $3`,
+    [tableNumber, restaurantId, sessionId],
+  );
+
+  if (result.rows.length === 0) return false;
+  return result.rows[0].status === "open";
+}
+
+async function validateGuestSocketPayload(payload: any) {
+  if (!isGuestSessionPayload(payload)) return false;
+
+  const session = await findActiveSessionByHash(db, payload.session_id);
+  if (!session) return false;
+
+  return (
+    session.restaurant_status === "active" &&
+    session.status === "open" &&
+    !session.closed_at &&
+    String(normalizeRestaurantId(payload.restaurant_id)) ===
+      String(normalizeRestaurantId(session.restaurant_id)) &&
+    String(payload.table_number) === String(session.table_number)
   );
 }
 
@@ -94,40 +132,30 @@ async function generateOrderId(restaurantId: string): Promise<string> {
   const datePrefix = `${year}${month}${day}`;
 
   try {
-    // หา order ล่าสุดของวันนี้จาก database
     const result = await db.query(
-      `SELECT id FROM orders 
-       WHERE id LIKE $1 AND restaurant_id = $2
-       ORDER BY id DESC 
-       LIMIT 1`,
-      [`ORD-${datePrefix}-%`, restaurantId]
+      `SELECT id
+         FROM orders
+        WHERE id LIKE $1
+          AND restaurant_id = $2
+        ORDER BY id DESC
+        LIMIT 1`,
+      [`ORD-${datePrefix}-%`, restaurantId],
     );
 
     let sequence = 1;
-
-    // ถ้ามี order วันนี้แล้ว เอา sequence ล่าสุด + 1
     if (result.rows.length > 0) {
-      const lastId = result.rows[0].id; // เช่น "ORD-20251109-005"
-      const parts = lastId.split("-"); // ["ORD", "20251109", "005"]
-      const lastSequence = parseInt(parts[2]); // 5
-      sequence = lastSequence + 1; // 6
+      const parts = String(result.rows[0].id).split("-");
+      sequence = Number.parseInt(parts[2], 10) + 1;
     }
 
-    const sequenceStr = String(sequence).padStart(3, "0");
-    const orderId = `ORD-${datePrefix}-${sequenceStr}`;
-
-    console.log(`✅ Generated order ID: ${orderId}`);
-    return orderId;
+    return `ORD-${datePrefix}-${String(sequence).padStart(3, "0")}`;
   } catch (err) {
-    console.error("❌ Error generating order ID:", err);
-    // Fallback: ใช้ timestamp + random ถ้า database error
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 1000);
-    return `ORD-${timestamp}-${random}`;
+    console.error("Error generating order id:", err);
+    return `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   }
 }
 
-async function Savetodb(order: {
+async function saveOrderToDb(order: {
   id: string;
   menu: any;
   table_number: number;
@@ -136,19 +164,28 @@ async function Savetodb(order: {
 }) {
   try {
     await db.query("BEGIN");
-    console.log("Customer Session Value:", order);
     await db.query(
-      "INSERT INTO orders (id,table_number,customer_session,status,updated_at,restaurant_id) VALUES ($1,$2,$3,'pending',NOW(),$4)",
-      [order.id, order.table_number, order.session, order.restaurant_id]
+      `INSERT INTO orders
+        (id, table_number, customer_session, status, updated_at, restaurant_id)
+       VALUES ($1, $2, $3, 'pending', NOW(), $4)`,
+      [order.id, order.table_number, order.session, order.restaurant_id],
     );
-    const items = order.menu.items;
-    console.log("items", items);
-    if (Array.isArray(order.menu.items)) {
+
+    const items = order.menu?.items;
+    if (Array.isArray(items)) {
       for (const item of items) {
         await db.query(
-          `INSERT INTO order_items (order_id, menu_item_name, quantity, price, notes, restaurant_id)
+          `INSERT INTO order_items
+            (order_id, menu_item_name, quantity, price, notes, restaurant_id)
            VALUES ($1, $2, $3, $4, $5, $6)`,
-          [order.id, item.name, item.qty, item.price, item.notes || null, order.restaurant_id]
+          [
+            order.id,
+            item.name,
+            item.qty,
+            item.price,
+            item.notes || null,
+            order.restaurant_id,
+          ],
         );
       }
     }
@@ -156,28 +193,25 @@ async function Savetodb(order: {
     await db.query("COMMIT");
   } catch (err) {
     await db.query("ROLLBACK");
-    console.error("Error FROM Savetodb function", (err as Error).message);
+    console.error("Error saving order:", (err as Error).message);
   }
 }
 
 function safeParse(
-  msg: unknown
+  msg: unknown,
 ): { ok: true; data: any } | { ok: false; err: Error } {
   try {
-    //  ถ้าเป็น object (และไม่ใช่ Uint8Array) ให้รับตรง ๆ ไม่ต้อง parse
-    if (
-      msg !== null &&
-      typeof msg === "object" &&
-      !(msg instanceof Uint8Array)
-    ) {
+    if (msg !== null && typeof msg === "object" && !(msg instanceof Uint8Array)) {
       return { ok: true, data: msg };
     }
+
     const text =
       typeof msg === "string"
         ? msg
         : msg instanceof Uint8Array
-        ? td.decode(msg)
-        : String(msg);
+          ? td.decode(msg)
+          : String(msg);
+
     return { ok: true, data: JSON.parse(text) };
   } catch (err: any) {
     return { ok: false, err };
@@ -187,25 +221,26 @@ function safeParse(
 function sendJSON(ws: ServerWebSocket, obj: any) {
   try {
     ws.send(JSON.stringify(obj));
-  } catch (e) {
-    console.error("[WS SEND ERROR]", e);
+  } catch (err) {
+    console.error("[WS SEND ERROR]", err);
   }
 }
 
 function preview(val: unknown, max = 300) {
   try {
-    const s =
+    const rendered =
       typeof val === "string"
         ? val
         : val instanceof Uint8Array
-        ? td.decode(val)
-        : JSON.stringify(val);
-    return s.length > max ? s.slice(0, max) + "…" : s;
+          ? td.decode(val)
+          : JSON.stringify(val);
+    return rendered.length > max ? `${rendered.slice(0, max)}…` : rendered;
   } catch {
     return String(val);
   }
 }
-function ensureCallStaff(x: any): x is Msgcallstaff {
+
+function ensureCallStaff(x: any): x is MsgCallStaff {
   return (
     x?.type === "call_staff" &&
     (typeof x?.table_number === "string" || typeof x?.table_number === "number")
@@ -215,9 +250,11 @@ function ensureCallStaff(x: any): x is Msgcallstaff {
 function ensureMessage(x: any): x is MsgMessage {
   return typeof x?.to === "string" && typeof x?.content === "string";
 }
+
 function ensureOrder(x: any): x is MsgOrder {
   return typeof x?.menu !== "undefined";
 }
+
 function ensureOrderStatus(x: any): x is MsgOrderStatus {
   return (
     typeof x?.to === "string" &&
@@ -226,50 +263,108 @@ function ensureOrderStatus(x: any): x is MsgOrderStatus {
   );
 }
 
-// ================================
-// SECTION C — WS Route
-// ================================
+async function resolvePayload(ws: any) {
+  const token = ws.data.query.token;
+  const jwt = ws.data.jwt;
+  return token ? await jwt.verify(token) : null;
+}
+
 export const web = (app: Elysia) => {
   return app.ws("/ws/:user", {
     query: t.Object({
       role: t.Union(
         [t.Literal("user"), t.Literal("kitchen"), t.Literal("admin")],
-        {
-          default: "user",
-        }
+        { default: "user" },
       ),
       restaurant_id: t.Optional(t.String()),
       token: t.Optional(t.String()),
     }),
 
     async open(ws) {
-      const username = ws.data.params.user as string;
-      const role = ws.data.query.role as Role;
-      const token = ws.data.query.token;
-      const payload =
-        token && (ws.data as any).jwt
-          ? await (ws.data as any).jwt.verify(token)
-          : null;
-      const restaurant_id = String(
-        normalizeRestaurantId(payload?.restaurant_id ?? ws.data.query.restaurant_id),
-      );
+      const payload = await resolvePayload(ws as any);
+      if (!payload) {
+        sendJSON((ws as any).raw, {
+          type: "error",
+          message: "Unauthorized websocket connection",
+        });
+        (ws as any).raw.close(1008, "Unauthorized");
+        return;
+      }
 
-      const restSockets = getRestaurantSockets(restaurant_id);
+      if (
+        isGuestSessionPayload(payload) &&
+        !(await validateGuestSocketPayload(payload))
+      ) {
+        sendJSON((ws as any).raw, {
+          type: "error",
+          message: "Guest session is not active",
+        });
+        (ws as any).raw.close(1008, "Inactive session");
+        return;
+      }
+
+      const username = String(payload.username);
+      const jwtRole = payload.role as JwtRole;
+      const role = mapJwtRoleToSocketRole(payload.role);
+      const restaurantId = String(normalizeRestaurantId(payload.restaurant_id));
+
+      if (jwtRole !== "superadmin") {
+        const restaurantStatus = await getRestaurantStatusById(restaurantId);
+        if (restaurantStatus !== "active") {
+          sendJSON((ws as any).raw, {
+            type: "error",
+            message: "Restaurant is suspended",
+          });
+          (ws as any).raw.close(1008, "Suspended restaurant");
+          return;
+        }
+
+        const subscription = await getRestaurantSubscriptionSnapshot(
+          restaurantId,
+        );
+        if (subscription && isSubscriptionBlocked(subscription.status)) {
+          sendJSON((ws as any).raw, {
+            type: "error",
+            message: "Subscription is inactive",
+          });
+          (ws as any).raw.close(4002, "subscription_inactive");
+          return;
+        }
+      }
+
+      const restSockets = getRestaurantSockets(restaurantId);
       restSockets[role].set(username, (ws as any).raw);
-      clients.set(username, { ws: (ws as any).raw, role, restaurant_id });
-      ws.subscribe(username);
-      
-      sendJSON(ws as any, {
-        type: "system",
-        message: `เชื่อมต่อสำเร็จในชื่อ ${username} (Role: ${role}, Restaurant: ${restaurant_id})`,
+
+      clients.set(clientKey(restaurantId, username), {
+        ws: (ws as any).raw,
+        role,
+        jwt_role: jwtRole,
+        restaurant_id: restaurantId,
+        username,
+        session_id:
+          typeof payload.session_id === "string" ? payload.session_id : undefined,
+        table_number:
+          typeof payload.table_number !== "undefined"
+            ? String(payload.table_number)
+            : undefined,
+        token_type:
+          typeof payload.token_type === "string" ? payload.token_type : undefined,
       });
 
-      console.log(`[WS OPEN] ${username} (${role}) connected to restaurant ${restaurant_id}`);
+      ws.subscribe(clientKey(restaurantId, username));
+      sendJSON(ws as any, {
+        type: "system",
+        message: `เชื่อมต่อสำเร็จในชื่อ ${username} (Role: ${role}, Restaurant: ${restaurantId})`,
+      });
     },
 
-    message(ws, msg) {
-      const username = ws.data.params.user as string;
-      const sender = clients.get(username);
+    async message(ws, msg) {
+      const payload = await resolvePayload(ws as any);
+      const username = payload?.username || (ws.data.params.user as string);
+      const restaurantId = payload
+        ? String(normalizeRestaurantId(payload.restaurant_id))
+        : "";
+      const sender = restaurantId ? getClient(restaurantId, username) : undefined;
 
       if (!sender) {
         sendJSON(ws as any, {
@@ -279,16 +374,12 @@ export const web = (app: Elysia) => {
         return;
       }
 
-      // Log raw payload (เห็นชัดว่า client ส่งอะไรจริง)
       console.log(
-        `[WS IN] user=${username} role=${
-          sender.role
-        } typeof=${typeof msg} raw=${preview(msg)}`
+        `[WS IN] user=${username} role=${sender.role} typeof=${typeof msg} raw=${preview(msg)}`,
       );
 
       const parsed = safeParse(msg);
       if (!parsed.ok) {
-        console.error("[WS PARSE ERROR]", parsed.err);
         sendJSON(ws as any, {
           type: "error",
           message: "ข้อความต้องเป็น JSON ที่ถูกต้อง",
@@ -305,30 +396,29 @@ export const web = (app: Elysia) => {
         return;
       }
 
-      routeMessage({ ws: ws as any, username, sender }, data);
+      await routeMessage({ ws: ws as any, username, sender }, data);
     },
 
-    close(ws) {
-      const username = ws.data.params.user as string;
-      const client = clients.get(username);
+    async close(ws) {
+      const payload = await resolvePayload(ws as any);
+      const username = payload?.username || (ws.data.params.user as string);
+      const restaurantId = payload
+        ? String(normalizeRestaurantId(payload.restaurant_id))
+        : "";
+      const client = restaurantId ? getClient(restaurantId, username) : undefined;
+
       if (client) {
         const restSockets = getRestaurantSockets(client.restaurant_id);
         restSockets[client.role].delete(username);
-        clients.delete(username);
+        clients.delete(clientKey(client.restaurant_id, username));
       }
-      console.log(
-        `[WS CLOSE] ${username} (${client?.role ?? "?"}) disconnected`
-      );
     },
   });
 };
 
-// ================================
-// MESSAGE ROUTER
-// ================================
 async function routeMessage(
   ctx: { ws: ServerWebSocket; username: string; sender: Client },
-  msg: IncomingMsg
+  msg: IncomingMsg,
 ) {
   const { ws, username, sender } = ctx;
   const restSockets = getRestaurantSockets(sender.restaurant_id);
@@ -347,11 +437,12 @@ async function routeMessage(
         });
         return;
       }
-      const recipient = clients.get(msg.to);
+
+      const recipient = getClient(sender.restaurant_id, msg.to);
       if (!recipient || recipient.restaurant_id !== sender.restaurant_id) {
         sendJSON(ws, {
           type: "error",
-          message: `ไม่พบผู้ใช้ ${msg.to} หรือไม่ได้เชื่อมต่อ (หรืออยู่คนละร้าน)`,
+          message: `ไม่พบผู้ใช้ ${msg.to} หรือไม่ได้เชื่อมต่อ`,
         });
         return;
       }
@@ -366,13 +457,34 @@ async function routeMessage(
       sendJSON(ws, {
         type: "system",
         message: `ส่งข้อความถึง ${msg.to} แล้ว`,
-        content: msg.content,
         timestamp: new Date().toISOString(),
       });
       return;
     }
 
     case "order": {
+      if (sender.jwt_role !== "superadmin") {
+        const restaurantStatus = await getRestaurantStatusById(sender.restaurant_id);
+        if (restaurantStatus !== "active") {
+          sendJSON(ws, {
+            type: "error",
+            message: "Restaurant is suspended",
+          });
+          return;
+        }
+
+        const subscription = await getRestaurantSubscriptionSnapshot(
+          sender.restaurant_id,
+        );
+        if (subscription && isSubscriptionBlocked(subscription.status)) {
+          sendJSON(ws, {
+            type: "error",
+            message: "Subscription is inactive",
+          });
+          return;
+        }
+      }
+
       if (sender.role !== "user") {
         sendJSON(ws, {
           type: "error",
@@ -380,20 +492,61 @@ async function routeMessage(
         });
         return;
       }
+
       if (!ensureOrder(msg)) {
         sendJSON(ws, { type: "error", message: "order ต้องมี menu" });
         return;
       }
 
-      const kitchenClients = Array.from(restSockets.kitchen.entries());
-      if (kitchenClients.length === 0) {
-        sendJSON(ws, { type: "error", message: "ไม่พบครัวที่เชื่อมต่ออยู่" });
+      if (!msg.table_number || !msg.session) {
+        sendJSON(ws, {
+          type: "error",
+          message: "order must include table_number and session",
+        });
         return;
       }
 
-      kitchenClients.forEach(([kitchenName, kitchenWs]) => {
+      if (sender.token_type === GUEST_SESSION_TOKEN_TYPE) {
+        if (
+          sender.session_id !== String(msg.session) ||
+          sender.table_number !== String(msg.table_number)
+        ) {
+          sendJSON(ws, {
+            type: "error",
+            message: "Guest token can only order for its own table session",
+          });
+          return;
+        }
+      }
+
+      const tableNumber = Number.parseInt(String(msg.table_number), 10);
+      const isValidTable = await validateTable(
+        tableNumber,
+        sender.restaurant_id,
+        String(msg.session),
+      );
+      if (!isValidTable) {
+        sendJSON(ws, {
+          type: "error",
+          message: "Table session is not valid for this restaurant",
+        });
+        return;
+      }
+
+      const kitchenClients = Array.from(restSockets.kitchen.values());
+      if (kitchenClients.length === 0) {
+        sendJSON(ws, {
+          type: "error",
+          message: "ไม่พบครัวที่เชื่อมต่ออยู่",
+        });
+        return;
+      }
+
+      const orderId = await generateOrderId(sender.restaurant_id);
+      kitchenClients.forEach((kitchenWs) => {
         sendJSON(kitchenWs, {
           type: "order",
+          order_id: orderId,
           from: username,
           menu: msg.menu,
           session: msg.session,
@@ -402,25 +555,19 @@ async function routeMessage(
         });
       });
 
-      const orderId = await generateOrderId(sender.restaurant_id);
-      try {
-        await Savetodb({
-          id: orderId,
-          menu: msg.menu,
-          session: msg.session,
-          table_number: parseInt(String(msg.table_number)),
-          restaurant_id: sender.restaurant_id,
-        });
-      } catch (err) {
-        console.error("Error savedb", (err as Error).message);
-      }
+      await saveOrderToDb({
+        id: orderId,
+        menu: msg.menu,
+        session: msg.session,
+        table_number: tableNumber,
+        restaurant_id: sender.restaurant_id,
+      });
+
       sendJSON(ws, {
         type: "system",
         message: "ส่งคำสั่งอาหารไปยังครัวแล้ว",
-        menu: msg.menu,
         timestamp: new Date().toISOString(),
       });
-      console.log(`[WS OUT] sent system ack to ${username}`);
       return;
     }
 
@@ -434,14 +581,15 @@ async function routeMessage(
         return;
       }
 
-      const recipient = clients.get(msg.to);
+      const recipient = getClient(sender.restaurant_id, msg.to);
       if (!recipient || recipient.restaurant_id !== sender.restaurant_id) {
         sendJSON(ws, {
           type: "error",
-          message: `ไม่พบผู้ใช้ ${msg.to} หรือไม่ได้เชื่อมต่อ (หรืออยู่คนละร้าน)`,
+          message: `ไม่พบผู้ใช้ ${msg.to} หรือไม่ได้เชื่อมต่อ`,
         });
         return;
       }
+
       sendJSON(recipient.ws, {
         type: "order_status",
         from: username,
@@ -451,24 +599,70 @@ async function routeMessage(
       });
       return;
     }
+
     case "call_staff": {
+      if (sender.jwt_role !== "superadmin") {
+        const restaurantStatus = await getRestaurantStatusById(sender.restaurant_id);
+        if (restaurantStatus !== "active") {
+          sendJSON(ws, {
+            type: "error",
+            message: "Restaurant is suspended",
+          });
+          return;
+        }
+
+        const subscription = await getRestaurantSubscriptionSnapshot(
+          sender.restaurant_id,
+        );
+        if (subscription && isSubscriptionBlocked(subscription.status)) {
+          sendJSON(ws, {
+            type: "error",
+            message: "Subscription is inactive",
+          });
+          return;
+        }
+      }
+
       if (!ensureCallStaff(msg)) {
         sendJSON(ws, {
           type: "error",
-          message:
-            "call_staff ต้องมี to, order_id และ status (accepted|preparing|done|rejected)",
+          message: "call_staff ต้องมี table_number",
         });
         return;
       }
-      
+
+      if (sender.token_type === GUEST_SESSION_TOKEN_TYPE) {
+        if (!sender.session_id || sender.table_number !== String(msg.table_number)) {
+          sendJSON(ws, {
+            type: "error",
+            message: "Guest token can only call staff for its own table",
+          });
+          return;
+        }
+
+        const isValidTable = await validateTable(
+          Number.parseInt(String(msg.table_number), 10),
+          sender.restaurant_id,
+          sender.session_id,
+        );
+        if (!isValidTable) {
+          sendJSON(ws, {
+            type: "error",
+            message: "Table session is not valid for this restaurant",
+          });
+          return;
+        }
+      }
+
       const adminEntries = Array.from(restSockets.admin.values());
       if (adminEntries.length === 0) {
         sendJSON(ws, {
           type: "error",
-          message: "ไม่พบผู้ใช้หรือไม่ได้เชื่อมต่อ",
+          message: "ไม่พบผู้ดูแลหรือพนักงานที่เชื่อมต่ออยู่",
         });
         return;
       }
+
       adminEntries.forEach((adminWs) => {
         sendJSON(adminWs, {
           type: "call_staff",
@@ -477,6 +671,7 @@ async function routeMessage(
           timestamp: new Date().toISOString(),
         });
       });
+
       sendJSON(ws, {
         type: "system",
         message: "เรียกพนักงานแล้ว รอสักครู่...",
@@ -485,30 +680,38 @@ async function routeMessage(
     }
 
     default: {
-      console.warn("[WS INVALID TYPE]", msg);
       sendJSON(ws, {
         type: "error",
-        message:
-          "รูปแบบข้อความไม่ถูกต้อง ใช้ { type: 'message', to, content } หรือ { type: 'order', menu } หรือ { type:'ping' }",
+        message: "Unsupported websocket message type",
       });
-      return;
     }
   }
 }
-export const notifyTableClosed = (sessionHash: string) => {
-  // 1. หาว่า session นี้เชื่อมต่ออยู่ไหม
-  const client = clients.get(sessionHash);
 
-  if (client && client.ws) {
-    // 2. ส่งข้อความแจ้งเตือนไปหา
-    sendJSON(client.ws, {
-      type: "table_closed",
-      message: "Table has been closed by staff",
+export const notifyTableClosed = (sessionHash: string) => {
+  const matchedClients = Array.from(clients.values()).filter(
+    (entry) =>
+      entry.session_id === sessionHash ||
+      entry.username === buildGuestSessionUsername(sessionHash),
+  );
+
+  if (matchedClients.length > 0) {
+    matchedClients.forEach((client) => {
+      if (!client?.ws) return;
+
+      sendJSON(client.ws, {
+        type: "table_closed",
+        message: "Table has been closed by staff",
+      });
+
+      try {
+        client.ws.close(4001, "table_closed");
+      } catch (err) {
+        console.error("[WS CLOSE ERROR]", err);
+      }
     });
-    console.log(`[WS EXTERNAL] Sent close signal to ${sessionHash}`);
     return true;
   }
 
-  console.log(`[WS EXTERNAL] User ${sessionHash} not found or disconnected`);
   return false;
 };

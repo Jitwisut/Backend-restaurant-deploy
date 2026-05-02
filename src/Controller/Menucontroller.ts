@@ -1,10 +1,20 @@
 import { Context } from "elysia";
 import { getDB } from "../lib/connect";
-import { getRestaurantScope } from "../middleware/restaurantScope";
+import { requireRole } from "../middleware/restaurantScope";
 const db = getDB();
 export const menucontroller = {
   getmenu: async (context: Context & { jwt?: any }) => {
-    const { restaurantId } = await getRestaurantScope(context);
+    const scope = await requireRole(context, [
+      "user",
+      "staff",
+      "kitchen",
+      "admin",
+      "owner",
+      "superadmin",
+    ]);
+    if (!scope.ok) return scope.response;
+
+    const { restaurantId } = scope;
     const query = "SELECT * FROM menu_new WHERE restaurant_id=$1";
     const result = await db.query(query, [restaurantId]);
     const menu = result.rows.map((r: any) => {

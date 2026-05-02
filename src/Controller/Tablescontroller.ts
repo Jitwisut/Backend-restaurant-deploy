@@ -3,6 +3,16 @@ import QRCode from "qrcode";
 import { getDB } from "../lib/connect";
 import { randomUUID } from "crypto";
 import { requireRole } from "../middleware/restaurantScope";
+import { notifyTableClosed } from "../router/websocket";
+import {
+  buildGuestSessionUsername,
+  findActiveSessionByHash,
+  GUEST_SESSION_TTL_SECONDS,
+} from "../lib/guestSession";
+import {
+  getRestaurantSubscriptionSnapshot,
+  isSubscriptionBlocked,
+} from "../lib/subscription";
 
 const baseurl = Bun.env.ORIGIN_URL;
 const db = getDB();
@@ -19,12 +29,10 @@ export const Tablecontroller = {
     ]);
     if (!scope.ok) return scope.response;
 
-    const result =
-      scope.payload.role === "superadmin"
-        ? await db.query("SELECT * FROM tables")
-        : await db.query("SELECT * FROM tables WHERE restaurant_id=$1", [
-            scope.restaurantId,
-          ]);
+    const result = await db.query(
+      "SELECT * FROM tables WHERE restaurant_id=$1 ORDER BY table_number ASC",
+      [scope.restaurantId],
+    );
     set.status = 200;
 
     return { tables: result.rows };
@@ -150,13 +158,16 @@ export const Tablecontroller = {
       }
 
       if (closedSessionId) {
-        server?.publish(
-          closedSessionId,
-          JSON.stringify({
-            type: "table_closed",
-            message: "Table has been close",
-          }),
-        );
+        const notified = notifyTableClosed(String(closedSessionId));
+        if (!notified) {
+          server?.publish(
+            closedSessionId,
+            JSON.stringify({
+              type: "table_closed",
+              message: "Table has been close",
+            }),
+          );
+        }
       }
 
       await db.query(
@@ -186,7 +197,10 @@ export const Tablecontroller = {
     }
 
     const result = await db.query(
-      "SELECT * FROM tables WHERE customer_session = $1",
+      `SELECT t.*, r.status AS restaurant_status
+         FROM tables t
+         LEFT JOIN restaurants r ON r.id = t.restaurant_id
+        WHERE t.customer_session::text = $1`,
       [hashcode],
     );
 
@@ -195,8 +209,81 @@ export const Tablecontroller = {
       return { message: "Table not found" };
     }
 
+    if (result.rows[0].restaurant_status !== "active") {
+      set.status = 403;
+      return { message: "Restaurant is suspended" };
+    }
+
+    const subscription = await getRestaurantSubscriptionSnapshot(
+      result.rows[0].restaurant_id,
+    );
+    if (subscription && isSubscriptionBlocked(subscription.status)) {
+      set.status = 403;
+      return { message: "Restaurant subscription is inactive" };
+    }
+
     set.status = 200;
     return { message: "Table found", table: result.rows[0] };
+  },
+
+  createGuestToken: async (
+    context: Context & {
+      params: { session: string };
+      jwt?: any;
+    },
+  ) => {
+    const { set, params, jwt } = context;
+    const sessionId = params.session;
+
+    if (!sessionId) {
+      set.status = 400;
+      return { message: "Session not found" };
+    }
+
+    const session = await findActiveSessionByHash(db, sessionId);
+    if (!session) {
+      set.status = 404;
+      return { message: "Table not found" };
+    }
+
+    if (session.restaurant_status !== "active") {
+      set.status = 403;
+      return { message: "Restaurant is suspended" };
+    }
+
+    const subscription = await getRestaurantSubscriptionSnapshot(
+      session.restaurant_id,
+    );
+    if (subscription && isSubscriptionBlocked(subscription.status)) {
+      set.status = 403;
+      return { message: "Restaurant subscription is inactive" };
+    }
+
+    if (session.status !== "open" || session.closed_at) {
+      set.status = 409;
+      return { message: "Table session is no longer active" };
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const token = await jwt.sign({
+      username: buildGuestSessionUsername(sessionId),
+      role: "user",
+      restaurant_id: session.restaurant_id,
+      session_id: sessionId,
+      table_number: session.table_number,
+      token_type: "guest_session",
+      iat: now,
+      exp: now + GUEST_SESSION_TTL_SECONDS,
+    });
+
+    set.status = 200;
+    return {
+      token,
+      expires_in: GUEST_SESSION_TTL_SECONDS,
+      session_id: sessionId,
+      table_number: session.table_number,
+      restaurant_id: session.restaurant_id,
+    };
   },
 
   ordersuccess: async (

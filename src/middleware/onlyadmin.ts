@@ -12,6 +12,10 @@ export const beforeadmin = async (context: Context) => {
 
   const decode = await jwt.verify(token);
   
+  if (!decode) {
+    set.status = 401;
+    return { message: "Unauthorized: Invalid token" };
+  }
 
   if (!["admin", "owner", "superadmin"].includes(decode.role)) {
     set.status = 403;

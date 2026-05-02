@@ -27,14 +27,59 @@ ALTER TABLE sessions ADD COLUMN IF NOT EXISTS restaurant_id INTEGER REFERENCES r
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS restaurant_id INTEGER REFERENCES restaurants(id);
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS restaurant_id INTEGER REFERENCES restaurants(id);
 
-UPDATE users SET restaurant_id = 1 WHERE restaurant_id IS NULL;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_name = 'order_items'
+      AND column_name = 'order_id'
+      AND data_type <> 'character varying'
+  ) THEN
+    IF EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'order_items_order_id_fkey'
+    ) THEN
+      ALTER TABLE order_items DROP CONSTRAINT order_items_order_id_fkey;
+    END IF;
+
+    ALTER TABLE order_items
+      ALTER COLUMN order_id TYPE VARCHAR(255)
+      USING order_id::text;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_name = 'orders'
+      AND column_name = 'id'
+      AND data_type <> 'character varying'
+  ) THEN
+    ALTER TABLE orders
+      ALTER COLUMN id TYPE VARCHAR(255)
+      USING id::text;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'order_items_order_id_fkey'
+  ) THEN
+    ALTER TABLE order_items
+      ADD CONSTRAINT order_items_order_id_fkey
+      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE;
+  END IF;
+END $$;
+
+UPDATE users SET restaurant_id = 1 WHERE restaurant_id IS NULL AND role <> 'superadmin';
 UPDATE menu_new SET restaurant_id = 1 WHERE restaurant_id IS NULL;
 UPDATE tables SET restaurant_id = 1 WHERE restaurant_id IS NULL;
 UPDATE sessions SET restaurant_id = 1 WHERE restaurant_id IS NULL;
 UPDATE orders SET restaurant_id = 1 WHERE restaurant_id IS NULL;
 UPDATE order_items SET restaurant_id = 1 WHERE restaurant_id IS NULL;
 
-ALTER TABLE users ALTER COLUMN restaurant_id SET NOT NULL;
+ALTER TABLE users ALTER COLUMN restaurant_id DROP NOT NULL;
 ALTER TABLE menu_new ALTER COLUMN restaurant_id SET NOT NULL;
 ALTER TABLE tables ALTER COLUMN restaurant_id SET NOT NULL;
 ALTER TABLE sessions ALTER COLUMN restaurant_id SET NOT NULL;
@@ -77,6 +122,21 @@ BEGIN
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_users_restaurant ON users(restaurant_id);
+DROP INDEX IF EXISTS users_username_key;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'users_username_key'
+  ) THEN
+    ALTER TABLE users DROP CONSTRAINT users_username_key;
+  END IF;
+END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS users_restaurant_username_key
+  ON users(restaurant_id, username)
+  WHERE restaurant_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS users_global_superadmin_username_key
+  ON users(username)
+  WHERE role = 'superadmin';
 CREATE INDEX IF NOT EXISTS idx_menu_restaurant ON menu_new(restaurant_id);
 CREATE INDEX IF NOT EXISTS idx_tables_restaurant ON tables(restaurant_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_restaurant ON sessions(restaurant_id);

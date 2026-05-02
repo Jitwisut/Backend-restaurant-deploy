@@ -2,9 +2,10 @@
   "name": "app",
   "version": "1.0.50",
   "scripts": {
-    "test": "bun test",
-    "test:watch": "bun test --watch",
+    "test": "bun --env-file=.env.test test",
+    "test:watch": "bun --env-file=.env.test test --watch",
     "migrate:multi-tenant": "bun run src/scripts/run-migration.ts db/migrations/001_multi_tenant_mvp.sql",
+    "subscriptions:cycle": "bun run src/scripts/process-subscriptions.ts",
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts"
   },

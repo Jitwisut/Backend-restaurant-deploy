@@ -12,12 +12,10 @@ export const Admincontroller = {
     if (!scope.ok) return scope.response;
 
     try {
-      const result =
-        scope.payload.role === "superadmin"
-          ? await db.query("SELECT * FROM users")
-          : await db.query("SELECT * FROM users WHERE restaurant_id=$1", [
-              scope.restaurantId,
-            ]);
+      const result = await db.query(
+        "SELECT * FROM users WHERE restaurant_id=$1",
+        [scope.restaurantId],
+      );
       const usersRaw = result.rows;
 
       if (!Array.isArray(usersRaw)) {
@@ -58,14 +56,34 @@ export const Admincontroller = {
 
     try {
       const { originuser, username, email, role } = body;
-      const isSuperAdmin = scope.payload.role === "superadmin";
+      const duplicateUsername = await db.query(
+        `SELECT 1
+           FROM users
+          WHERE restaurant_id=$1
+            AND username=$2
+            AND username<>$3`,
+        [scope.restaurantId, username, originuser],
+      );
+      if (duplicateUsername.rowCount > 0) {
+        set.status = 400;
+        return { message: "Username already exist in this restaurant" };
+      }
+
+      const duplicateEmail = await db.query(
+        `SELECT 1
+           FROM users
+          WHERE LOWER(email)=LOWER($1)
+            AND NOT (restaurant_id=$2 AND username=$3)`,
+        [email, scope.restaurantId, originuser],
+      );
+      if (duplicateEmail.rowCount > 0) {
+        set.status = 400;
+        return { message: "Email already exist" };
+      }
+
       const result = await db.query(
-        isSuperAdmin
-          ? "UPDATE users SET username=$1, email=$2, role=$3 WHERE username=$4"
-          : "UPDATE users SET username=$1, email=$2, role=$3 WHERE username=$4 AND restaurant_id=$5",
-        isSuperAdmin
-          ? [username, email, role, originuser]
-          : [username, email, role, originuser, scope.restaurantId],
+        "UPDATE users SET username=$1, email=$2, role=$3 WHERE username=$4 AND restaurant_id=$5",
+        [username, email.trim().toLowerCase(), role, originuser, scope.restaurantId],
       );
 
       if (result.rowCount === 0) {
@@ -98,16 +116,18 @@ export const Admincontroller = {
     }
 
     try {
-      const resultemail = await db.query("SELECT email FROM users WHERE email=$1", [
-        body.email,
-      ]);
-      const user = await db.query("SELECT * FROM users WHERE username=$1", [
-        body.username,
-      ]);
+      const resultemail = await db.query(
+        "SELECT email FROM users WHERE LOWER(email)=LOWER($1)",
+        [body.email],
+      );
+      const user = await db.query(
+        "SELECT * FROM users WHERE restaurant_id=$1 AND username=$2",
+        [scope.restaurantId, body.username],
+      );
 
       if (user.rowCount > 0) {
         set.status = 400;
-        return { message: "Username already exist" };
+        return { message: "Username already exist in this restaurant" };
       }
       if (resultemail.rowCount > 0) {
         set.status = 400;
@@ -185,12 +205,9 @@ export const Admincontroller = {
       return { message: "Please Enter username" };
     }
 
-    const isSuperAdmin = scope.payload.role === "superadmin";
     const result = await db.query(
-      isSuperAdmin
-        ? "DELETE FROM users WHERE username=$1"
-        : "DELETE FROM users WHERE username=$1 AND restaurant_id=$2",
-      isSuperAdmin ? [username] : [username, scope.restaurantId],
+      "DELETE FROM users WHERE username=$1 AND restaurant_id=$2",
+      [username, scope.restaurantId],
     );
 
     if (result.rowCount === 0) {

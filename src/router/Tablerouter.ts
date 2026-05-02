@@ -36,6 +36,7 @@ export const Tablerouter = (app: Elysia) => {
       }*/,
       )
       .get("/checktable/:session", Tablecontroller.checktabel)
+      .post("/session/:session/guest-token", Tablecontroller.createGuestToken)
 
       .post("/ordersuccess", Tablecontroller.ordersuccess, {
         body: t.Object({

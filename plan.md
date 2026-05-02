@@ -1,5 +1,32 @@
 # Multi-tenant Restaurant SaaS Migration Plan
 
+## Production Readiness Update (2026-05-02)
+
+**Current backend status:** Not production-ready yet. It is suitable for local development or staging validation, but should not be used as a paid/customer-facing product until the checklist below is completed.
+
+**Latest backend test result:** `bun --env-file=.env.test test` = 80 passed, 5 failed. The remaining failures are around `/menu/get` because tests still expect public menu access, while the backend currently requires JWT.
+
+### Must Fix Before Production
+
+- Decide and implement the menu access model. If customer menu pages are public, add a slug-based public endpoint such as `/menu/:slug` or `/app/:slug/menu` that resolves `restaurant_id` from restaurant slug. Keep admin/staff menu management protected by JWT.
+- Move all runtime schema changes into migrations. Runtime request paths must not run `CREATE TABLE` or `ALTER TABLE`; `subscriptions` schema setup currently still lives in runtime helpers and should become a migration.
+- Add complete production migrations for `subscriptions`, default table provisioning, tenant indexes, constraints, and rollback notes.
+- Add `.env.example` with `DATABASE_URL`, `JWT_SECRET`, `PORT`, `ORIGIN_URL`, `ORIGIN_URL2`, `DEFAULT_RESTAURANT_ID`, `DEFAULT_TABLE_COUNT`, `RESTAURANT_SIGNUP_ENABLED`, `SUPER_ADMIN_EMAIL`, and `SUPER_ADMIN_PASSWORD`.
+- Remove unsafe database fallback for production. `connect.ts` should fail fast when `DATABASE_URL` is missing outside test/dev instead of falling back to `restaurant_test`.
+- Expand tenant isolation tests for menu, upload, profile, websocket, admin users, tables, orders, guest sessions, and superadmin impersonation.
+- Harden WebSocket auth by requiring a valid token on connect, binding every connection to token-derived `restaurant_id`, and verifying every event stays inside the same tenant.
+- Add production operations basics: health check endpoint, structured logging, request IDs, deployment migration step, bootstrap/seed superadmin script, backup/rollback notes, and tenant-aware rate limiting.
+
+### Recently Stabilized
+
+- `/tables/gettable` no longer runs schema migration during requests.
+- CORS headers are now applied on error responses, so frontend can see real backend errors instead of misleading browser CORS messages.
+- New restaurants now get default tables automatically.
+- Existing `weedguy` restaurant in the local dev database has been provisioned with 12 available tables.
+- Focused validation passed: `table.test.ts` = 13/13, `restaurant.test.ts` = 6/6.
+
+---
+
 ## ภาพรวม
 
 เปลี่ยนแปลงระบบ backend จากร้านอาหารเดียว ให้รองรับระบบหลายร้านอาหาร (Multi-tenant Restaurant SaaS) โดยแต่ละร้านอาหารสามารถจัดการข้อมูลของตัวเองได้อย่างเป็นอิสระ
