@@ -1,9 +1,10 @@
 import { Elysia, t } from "elysia";
 import { Tablecontroller } from "../Controller/Tablescontroller";
 import { rateLimit } from "elysia-rate-limit";
+import { menucontroller } from "../Controller/Menucontroller";
 
 export const Tablerouter = (app: Elysia) => {
-  return app.group("/tables", (app) => {
+  app.group("/tables", (app) => {
     const gettableLimit = new Elysia()
       .use(
         rateLimit({
@@ -36,6 +37,9 @@ export const Tablerouter = (app: Elysia) => {
       }*/,
       )
       .get("/checktable/:session", Tablecontroller.checktabel)
+      .get("/session/:session/menu", menucontroller.getSessionMenu)
+      .get("/session/:session/bill", Tablecontroller.sessionBill)
+      .get("/session/:session/orders", Tablecontroller.sessionOrders)
       .post("/session/:session/guest-token", Tablecontroller.createGuestToken)
 
       .post("/ordersuccess", Tablecontroller.ordersuccess, {
@@ -52,4 +56,9 @@ export const Tablerouter = (app: Elysia) => {
       .post("/addtable", Tablecontroller.addtable);
     return app;
   });
+  app.group("/sessions", (app) => {
+    app.get("/:session/bill", Tablecontroller.publicSessionBill);
+    return app;
+  });
+  return app;
 };
